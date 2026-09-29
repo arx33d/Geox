@@ -177,7 +177,12 @@ def main():
     print("=" * 60)
     if not args.no_open:
         threading.Timer(1.5, lambda: webbrowser.open(url)).start()
-    app.run(host=args.host, port=args.port, threaded=True, debug=False)
+    try:
+        from waitress import serve
+        serve(app, host=args.host, port=args.port, threads=8)
+    except ImportError:
+        # waitress not installed — fall back to Flask's built-in server
+        app.run(host=args.host, port=args.port, threaded=True, debug=False)
 
 
 if __name__ == "__main__":
