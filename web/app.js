@@ -352,20 +352,23 @@ function renderSession(s) {
 async function enableDevMode(ev) {
   const b = ev.target;
   b.disabled = true;
+  const original = b.textContent;
   b.textContent = "Asking the iPhone…";
   try {
     const d = await api("/api/ios/enable-devmode", {});
     if (d.manual) {
       toast(d.note, "ok");
-      b.textContent = "Waiting for you to flip the switch in Settings…";
+      b.textContent = "Check the iPhone's Settings";
     } else {
       toast("Developer Mode enabled — the iPhone is rebooting. Unlock it when it's back, then press START again.", "ok");
       b.textContent = "iPhone is rebooting…";
     }
   } catch (e) {
     toast(e.message, "error");
+    b.textContent = original;
+  } finally {
     b.disabled = false;
-    b.textContent = "Enable Developer Mode (reboots iPhone)";
+    if (b.textContent !== original) setTimeout(() => { b.textContent = original; }, 15000);
   }
 }
 
@@ -377,6 +380,8 @@ async function poll() {
     state.devices = st.devices;
     renderCaps(st.capabilities);
     renderDevices();
+    const selDev = st.devices.find((x) => x.id === state.selected);
+    $("devModeBtn").classList.toggle("hidden", !(selDev && selDev.platform === "ios"));
     const s = state.selected ? st.sessions.find((x) => x.device_id === state.selected) : st.sessions[0];
     state.session = s || null;
     $("startBtn").classList.toggle("hidden", !!s && s.state !== "stopped" && s.state !== "failed");
@@ -400,6 +405,7 @@ function refresh(force) {
 
 /* ------------------------------------------------------------- controls */
 $("refreshBtn").addEventListener("click", () => refresh(true));
+$("devModeBtn").addEventListener("click", enableDevMode);
 $("installAdbBtn").addEventListener("click", async () => {
   try {
     await api("/api/android/install-adb", {});
