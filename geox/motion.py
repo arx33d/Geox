@@ -125,8 +125,65 @@ class Route:
         return self._point_at(self.pos)
 
 
+class TimedRoute:
+    """Travel a polyline where every segment has its own real travel time.
+
+    This is what makes a trip behave like a real drive: segments that took
+    the router 90 s (highway) are covered fast, segments that took 30 s
+    (city street) slowly.  ``speed_factor`` scales the whole timeline.
+    One-way only: after the total time the position stays parked at the end.
+    """
+
+    def __init__(self, waypoints, seg_seconds, speed_factor=1.0):
+        self.wps = [(float(a), float(b)) for a, b in waypoints]
+        if len(self.wps) < 2:
+            raise ValueError("a route needs at least 2 waypoints")
+        if len(seg_seconds) != len(self.wps) - 1:
+            raise ValueError("seg_seconds must have one entry per segment")
+        self.seg_t = [max(0.001, float(s)) / max(0.1, float(speed_factor))
+                      for s in seg_seconds]
+        # cumulative time at the start of each segment
+        self.cum = [0.0]
+        for t in self.seg_t:
+            self.cum.append(self.cum[-1] + t)
+        self.total_t = self.cum[-1]
+        self.seg_d = [haversine_m(a, b, c, d)
+                      for (a, b), (c, d) in zip(self.wps, self.wps[1:])]
+        self.time = 0.0
+
+    @property
+    def speed_mps(self):
+        i = min(self._edge_index(self.time), len(self.seg_d) - 1)
+        return self.seg_d[i] / self.seg_t[i] if self.seg_t[i] > 0 else 0.0
+
+    def _edge_index(self, t):
+        lo, hi = 0, len(self.seg_t) - 1
+        while lo < hi:
+            mid = (lo + hi) // 2
+            if self.cum[mid + 1] <= t:
+                lo = mid + 1
+            else:
+                hi = mid
+        return lo
+
+    def step(self, dt):
+        self.time = min(self.time + max(dt, 0.0), self.total_t)
+        i = self._edge_index(self.time)
+        seg_t = self.seg_t[i]
+        frac = 0.0 if seg_t <= 0 else min(1.0, (self.time - self.cum[i]) / seg_t)
+        a, b = self.wps[i]
+        c, d = self.wps[i + 1]
+        return a + (c - a) * frac, b + (d - b) * frac
+
+
 def build_motion(cfg):
     mode = cfg.get("mode", "fixed")
+    if mode == "route" and cfg.get("seg_seconds"):
+        return TimedRoute(
+            cfg["waypoints"],
+            cfg["seg_seconds"],
+            speed_factor=cfg.get("speed_factor", 1.0),
+        )
     if mode == "jitter":
         return Jitter(
             cfg["lat"], cfg["lng"],

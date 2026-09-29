@@ -98,12 +98,22 @@
         </div>
         <label class="optlabel">Optional — paste a Google Maps link (route or place)</label>
         <input id="gmapsInput" type="text" placeholder="https://www.google.com/maps/dir/…">
+        <div class="optgrid">
+          <div>
+            <label class="optlabel">Speed factor (1 = real road speeds)</label>
+            <input id="tripFactorInput" type="number" value="1" min="0.1" max="20" step="0.1">
+          </div>
+          <div>
+            <label class="optlabel">Trip time at this speed</label>
+            <input id="tripEta" type="text" value="plan a route first" disabled>
+          </div>
+        </div>
         <div id="tripSummary" class="tripsummary hidden"></div>
         <div class="hint" id="tripHint">
           Start point = <b>the map marker</b> (move it to where the phone really is).
-          Geox follows real streets from OpenStreetMap routers. Bus/Metro follows the
-          road network at a transit-like average speed — free routers don't publish
-          live timetables.
+          Speeds follow the real road: fast on highways, slow in city streets.
+          A factor of 2 travels twice as fast; Bus/Metro holds a transit-like average
+          since free routers don't publish live timetables.
         </div>
       </div>
     </section>

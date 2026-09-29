@@ -133,6 +133,14 @@ class Engine:
             if len(wps) < 2:
                 raise ValueError("A route needs at least 2 waypoints.")
             cfg["waypoints"] = [check_ll(a, b, f"waypoint {i+1}") for i, (a, b) in enumerate(wps)]
+            if cfg.get("seg_seconds") is not None:
+                segs = cfg["seg_seconds"]
+                if not isinstance(segs, list) or len(segs) != len(cfg["waypoints"]) - 1:
+                    raise ValueError("The route timing is malformed. Plan the trip again.")
+                cfg["seg_seconds"] = [min(max(float(s), 0.01), 86400.0) for s in segs]
+                if sum(cfg["seg_seconds"]) > 14 * 86400:
+                    raise ValueError("That trip would take over 2 weeks at this speed.")
+                cfg["speed_factor"] = min(max(float(cfg.get("speed_factor", 1.0)), 0.1), 20.0)
         else:
             cfg["lat"], cfg["lng"] = check_ll(cfg.get("lat"), cfg.get("lng"), "Target")
         if mode == "jitter":

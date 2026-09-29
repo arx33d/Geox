@@ -209,6 +209,22 @@ document.querySelectorAll("#tripProfiles .chip").forEach((c) =>
 
 $("tripPlanBtn").addEventListener("click", planTrip);
 $("tripDestInput").addEventListener("keydown", (e) => e.key === "Enter" && planTrip());
+$("tripFactorInput").addEventListener("change", updateTripEta);
+
+function updateTripEta() {
+  if (!state.trip) return;
+  const f = Math.min(Math.max(+$("tripFactorInput").value || 1, 0.1), 20);
+  const mins = Math.max(1, Math.round(state.trip.duration_min / f));
+  $("tripEta").value = `about ${mins >= 60 ? Math.floor(mins / 60) + " h " : ""}${mins % 60} min`;
+  if (!$("tripSummary").classList.contains("hidden")) {
+    const label = mins >= 60 ? `${Math.floor(mins / 60)} h ${mins % 60} min` : `${mins} min`;
+    $("tripSummary").innerHTML =
+      `<b>${state.trip.distance_km} km</b> · about <b>${label}</b> · ` +
+      `avg ${(state.trip.speed_kmh * f).toFixed(1)} km/h · ${state.trip.waypoints.length} points<br>` +
+      `Destination: ${state.trip.dest_label}<br>Speeds follow the real road (highway fast, city slow), ` +
+      `scaled ×${f}, then it parks at the destination.`;
+  }
+}
 
 async function planTrip() {
   const dest = $("tripDestInput").value.trim();
@@ -227,11 +243,7 @@ async function planTrip() {
     state.trip = trip;
     setMode("trip");
     redrawOverlays();
-    $("tripSummary").innerHTML =
-      `<b>${trip.distance_km} km</b> · about <b>${trip.duration_min} min</b> · ` +
-      `avg ${trip.speed_kmh} km/h · ${trip.waypoints.length} points<br>` +
-      `Destination: ${trip.dest_label}<br>Location will follow the real itinerary, ` +
-      `then stay parked at the destination.`;
+    updateTripEta();
     map.fitBounds(L.polyline(trip.waypoints).getBounds(), { padding: [40, 40] });
     toast("Itinerary planned — press START SPOOFING.", "ok");
   } catch (e) {
@@ -417,7 +429,9 @@ $("startBtn").addEventListener("click", async () => {
     if (!state.trip) { toast("Plan an itinerary first (Trip → Plan).", "error"); return; }
     Object.assign(body, {
       mode: "route", waypoints: state.trip.waypoints,
-      speed_kmh: state.trip.speed_kmh, loop: false,
+      seg_seconds: state.trip.seg_seconds,
+      speed_factor: Math.min(Math.max(+$("tripFactorInput").value || 1, 0.1), 20),
+      loop: false,
       place: state.trip.dest_label,
     });
   }

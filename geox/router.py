@@ -115,39 +115,71 @@ def parse_trip_input(payload):
 
 
 def plan_route(from_ll, to_ll, profile):
-    """Fetch a real itinerary and return downsampled waypoints + stats."""
+    """Fetch a real itinerary with per-segment travel times.
+
+    Returns downsampled waypoints plus ``seg_seconds``: the real time each
+    segment takes, so the spoofed location speeds up on highways and slows
+    down in city streets instead of moving at one flat average.
+    """
     url = (
         f"{OSRM[profile]}/{from_ll[1]:.6f},{from_ll[0]:.6f};"
         f"{to_ll[1]:.6f},{to_ll[0]:.6f}"
     )
-    r = requests.get(url, params={"overview": "full", "geometries": "geojson"}, timeout=25)
+    r = requests.get(url, params={
+        "geometries": "geojson", "overview": "full", "annotations": "true",
+    }, timeout=30)
     r.raise_for_status()
     data = r.json()
     if data.get("code") != "Ok" or not data.get("routes"):
         raise ValueError(f"Router could not find a {profile} itinerary ({data.get('code')}).")
     route = data["routes"][0]
+
     coords = [(p[1], p[0]) for p in route["geometry"]["coordinates"]]  # lon,lat → lat,lng
+    durs = []
+    for leg in route["legs"]:
+        durs += [float(x) for x in (leg.get("annotation") or {}).get("duration", [])]
     distance_m = float(route["distance"])
-    duration_s = float(route["duration"])
+    real_duration_s = float(route["duration"])
+
+    if len(durs) != len(coords) - 1 or not durs:
+        # router gave no per-edge annotation: fall back to one flat speed
+        durs = []
+        if distance_m > 0 and real_duration_s > 0:
+            step_m = distance_m / max(1, len(coords) - 1)
+            n = max(1, len(coords) - 1)
+            durs = [real_duration_s / n] * n
 
     if profile == "transit":
-        speed_kmh = TRANSIT_AVG_KMH
-        duration_s = distance_m / (speed_kmh * 1000 / 3600)
-    else:
-        speed_kmh = (distance_m / 1000.0) / (duration_s / 3600.0) if duration_s > 0 else 20.0
+        # no free transit timetables: hold a transit-like average speed
+        speed_mps = TRANSIT_AVG_KMH * 1000.0 / 3600.0
+        real_duration_s = distance_m / speed_mps
+        durs = []
+        if distance_m > 0:
+            n = max(1, len(coords) - 1)
+            durs = [real_duration_s / n] * n
 
-    # downsample so the engine interpolates along the road, not through it
-    step = max(1, len(coords) // 400)
-    waypoints = coords[::step]
+    # downsample: merge edges so the engine gets ~400 segments with the
+    # summed real travel time of everything merged away
+    n_edges = len(coords) - 1
+    step = max(1, n_edges // 400)
+    waypoints, seg_seconds = [coords[0]], []
+    acc = 0.0
+    for i in range(n_edges):
+        acc += durs[i]
+        if (i + 1) % step == 0 or i == n_edges - 1:
+            waypoints.append(coords[i + 1])
+            seg_seconds.append(round(acc, 3))
+            acc = 0.0
     if waypoints[-1] != coords[-1]:
         waypoints.append(coords[-1])
-    if waypoints[0] != coords[0]:
-        waypoints.insert(0, coords[0])
+        seg_seconds.append(0.001)
 
+    speed_kmh = (distance_m / 1000.0) / (real_duration_s / 3600.0) if real_duration_s > 0 else 20.0
     return {
         "waypoints": [[round(a, 6), round(b, 6)] for a, b in waypoints],
+        "seg_seconds": seg_seconds,
         "distance_km": round(distance_m / 1000.0, 2),
-        "duration_min": round(duration_s / 60.0),
+        "duration_min": round(real_duration_s / 60.0),
         "speed_kmh": round(speed_kmh, 1),
         "profile": profile,
     }

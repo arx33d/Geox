@@ -76,9 +76,10 @@ This is what makes the spoof believable: your location **follows actual streets*
 1. Switch to **Trip**.
 2. Type a destination (or paste a **Google Maps link**; Geox reads route links, pinned places, and `@lat,lng` map views).
 3. Pick a profile: **Car, Bike, Walk, Bus/Metro**.
-4. The start point is **the map marker**; put it where the phone really is.
-5. Press **Plan**. Geox queries OpenStreetMap routers (free, no API key) and draws the real road route.
-6. Press **START SPOOFING**. The phone travels the itinerary at the route's real average speed, then **stays parked at the destination** when it arrives.
+4. Set a **speed factor** (1 = real road speeds). Speeds already follow the real road, so the location speeds up on highways and slows down in city streets; a factor of 2 travels twice as fast, 0.5 half as fast.
+5. The start point is **the map marker**; put it where the phone really is.
+6. Press **Plan**. Geox queries OpenStreetMap routers (free, no API key) and draws the real road route, segment by segment with each segment's real travel time.
+7. Press **START SPOOFING**. The phone travels the itinerary at those per-road speeds, then **stays parked at the destination** when it arrives.
 
 Bus/Metro follows the road network at a transit-like average speed (about 22 km/h door to door): free routers don't publish live timetables, so this is an approximation of taking the bus. For the exact shape of a metro line, use Draw mode and trace it.
 
