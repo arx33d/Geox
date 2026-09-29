@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Geox — GPS Spoofer</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header>
+  <div class="logo">GEOX</div>
+  <span class="tag">spoof the GPS of a phone connected to this PC</span>
+  <span class="spacer"></span>
+  <div class="pills" id="capPills"></div>
+</header>
+
+<main>
+  <aside id="panel">
+
+    <section class="card">
+      <h2><span class="step">1</span> Device</h2>
+      <div id="deviceList" class="devlist"><div class="empty">Scanning for phones…</div></div>
+      <div class="row">
+        <button id="refreshBtn" class="btn ghost small">Refresh devices</button>
+        <button id="installAdbBtn" class="btn ghost small hidden">Install ADB</button>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2><span class="step">2</span> Destination</h2>
+      <div class="row" style="margin-top:0">
+        <input id="searchInput" type="text" placeholder="Search a place — e.g. McMurdo Station">
+        <button id="searchBtn" class="btn small" style="flex:0 0 auto">Go</button>
+      </div>
+      <div id="searchResults" class="results hidden"></div>
+      <div id="presets" class="chips"></div>
+      <div class="row coords">
+        <input id="latInput" type="number" step="0.00001" placeholder="Latitude">
+        <input id="lngInput" type="number" step="0.00001" placeholder="Longitude">
+      </div>
+      <div id="placeLabel" class="muted small" style="margin-top:7px"></div>
+    </section>
+
+    <section class="card">
+      <h2><span class="step">3</span> Movement</h2>
+      <div class="modes" id="modeChips">
+        <button class="chip on" data-mode="fixed">Stay</button>
+        <button class="chip" data-mode="jitter">Roam</button>
+        <button class="chip" data-mode="custom">Draw</button>
+        <button class="chip" data-mode="trip">Trip</button>
+      </div>
+
+      <div id="roamOpts" class="optrow hidden">
+        <div class="optgrid">
+          <div>
+            <label class="optlabel">Wander radius (m)</label>
+            <input id="radiusInput" type="number" value="120" min="15" max="2000">
+          </div>
+          <div>
+            <label class="optlabel">Walking speed (km/h)</label>
+            <input id="roamSpeedInput" type="number" value="4.5" min="0.5" max="30" step="0.5">
+          </div>
+        </div>
+        <div class="hint">Drifts between random points inside the radius, like a real person on foot.</div>
+      </div>
+
+      <div id="customOpts" class="optrow hidden">
+        <div class="hint"><b>Draw mode:</b> click the map to add route waypoints in order. Right-click a point in the list to remove it.</div>
+        <div class="optgrid">
+          <div>
+            <label class="optlabel">Speed (km/h)</label>
+            <input id="customSpeedInput" type="number" value="12" min="0.5" max="200" step="0.5">
+          </div>
+          <div>
+            <label class="optlabel">Route behaviour</label>
+            <select id="customLoop" class="btn small" style="width:100%">
+              <option value="false">One-way — park at end</option>
+              <option value="true">Loop forever</option>
+            </select>
+          </div>
+        </div>
+        <div id="wpList"></div>
+        <div class="row"><button id="clearWpsBtn" class="btn ghost small">Clear waypoints</button></div>
+      </div>
+
+      <div id="tripOpts" class="optrow hidden">
+        <label class="optlabel">Destination</label>
+        <div class="row" style="margin-top:4px">
+          <input id="tripDestInput" type="text" placeholder="Where are you “going” today?">
+          <button id="tripPlanBtn" class="btn small" style="flex:0 0 auto">Plan</button>
+        </div>
+        <div class="chips" id="tripProfiles" style="margin-top:9px">
+          <button class="chip on" data-profile="car">Car</button>
+          <button class="chip" data-profile="bike">Bike</button>
+          <button class="chip" data-profile="walk">Walk</button>
+          <button class="chip" data-profile="transit">Bus/Metro</button>
+        </div>
+        <label class="optlabel">Optional — paste a Google Maps link (route or place)</label>
+        <input id="gmapsInput" type="text" placeholder="https://www.google.com/maps/dir/…">
+        <div id="tripSummary" class="tripsummary hidden"></div>
+        <div class="hint" id="tripHint">
+          Start point = <b>the map marker</b> (move it to where the phone really is).
+          Geox follows real streets from OpenStreetMap routers. Bus/Metro follows the
+          road network at a transit-like average speed — free routers don't publish
+          live timetables.
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2><span class="step">4</span> Control</h2>
+      <button id="startBtn" class="btn primary">START SPOOFING</button>
+      <button id="stopBtn" class="btn danger hidden">STOP — restore real GPS</button>
+      <div id="sessionCard" class="session hidden"></div>
+    </section>
+
+    <section class="card">
+      <h2>Log</h2>
+      <div id="log" class="log"></div>
+    </section>
+
+  </aside>
+  <div id="map"></div>
+</main>
+
+<div id="toast"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

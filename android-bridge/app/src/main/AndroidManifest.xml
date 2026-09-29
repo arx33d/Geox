@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
+    <uses-permission android:name="android.permission.ACCESS_MOCK_LOCATION"/>
+
+    <application
+        android:label="Geox Bridge"
+        android:theme="@android:style/Theme.Material.NoActionBar">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+        </activity>
+
+        <!-- Driven over ADB by the Geox desktop app -->
+        <receiver
+            android:name=".LocationReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.geox.bridge.SET_LOCATION"/>
+                <action android:name="com.geox.bridge.CLEAR"/>
+            </intent-filter>
+        </receiver>
+
+    </application>
+</manifest>

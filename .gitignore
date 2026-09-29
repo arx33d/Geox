@@ -1,0 +1,23 @@
+# Python
+__pycache__/
+.venv/
+
+# private runtime downloaded by the bootstrap
+runtime/
+
+# downloaded tools (ADB etc.) — re-fetched automatically on first run
+tools/platform-tools/
+
+# app state: logs, generated GPX tracks
+var/
+
+# Android build artifacts
+android-bridge/.gradle/
+android-bridge/build/
+android-bridge/app/build/
+android-bridge/local.properties
+*.apk
+
+# OS / editor noise
+Thumbs.db
+.DS_Store
