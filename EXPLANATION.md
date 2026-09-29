@@ -159,7 +159,8 @@ and stop the spoof in the same "story" you started it with.
 | "Developer Mode is OFF" error card | Press the **Enable Developer Mode** button in the card (passcode phones: flip the switch in Settings → Privacy & Security → Developer Mode), wait for the reboot, START again |
 | iOS 17+ first connect is slow | Normal — a tunnel and the developer image are being set up (first time only) |
 | Spoof stops when unplugged | Expected: the session lives on the cable. Keep connected. |
-| "The iPhone disappeared from USB" | Keep it plugged in and unlocked, press START again |
+| "The iPhone disappeared from USB" | The session waits up to 2 minutes for the phone to come back, then stops. Replug the cable (a different USB port helps), press START. |
+| Location briefly flickers back to real | Geox re-asserts the fake fix every second and reconnects through tunnel blips automatically — persistent flicker usually means a loose cable or a weak USB port; also keep USB selective suspend disabled (Geox PC: power plan → USB settings) |
 | Android "needs bridge setup" | Build the APK (§2), then press **Setup bridge** |
 | "ADB missing" pill | Press **Install ADB** (auto-downloads Google's tools) |
 | Android "unauthorized" | Unlock the phone, allow the USB-debugging prompt |

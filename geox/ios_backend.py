@@ -492,7 +492,11 @@ class IosCliSession:
         return GPX_DIR / name
 
     def _write_gpx(self, path):
-        motion = build_motion(self.cfg)
+        # self.motion persists across reconnects so routes continue from
+        # where they left off instead of teleporting back to the start
+        if self.motion is None:
+            self.motion = build_motion(self.cfg)
+        motion = self.motion
         t0 = _dt.datetime.now(_dt.timezone.utc).replace(microsecond=0)
         with open(path, "w", encoding="utf-8") as f:
             f.write(
@@ -538,10 +542,7 @@ class IosCliSession:
                     "then press START again."
                 )
             self._prepare_developer_image()
-            if self.cfg.get("mode") == "fixed":
-                self._run_point()
-            else:
-                self._run_gpx()
+            self._run_track()
         except IosError as e:
             self.error = str(e)
             self.state = "failed"
@@ -565,60 +566,79 @@ class IosCliSession:
         self.engine.log("[iOS17] establishing tunnel & preparing developer image…")
         _prepare_developer_image(self.engine)
 
-    def _run_point(self):
-        self.proc = self._launch(point=(float(self.cfg["lat"]), float(self.cfg["lng"])))
-        self.last = (float(self.cfg["lat"]), float(self.cfg["lng"]))
-        pump = threading.Thread(target=self._pump, args=(self.proc,), daemon=True)
-        pump.start()
-        # the first tunnel establishment can take ~20 s; wait for either the
-        # process to die (failure) or the session to settle in
-        for _ in range(40):
-            if self.proc.poll() is not None:
-                break
-            time.sleep(0.5)
-        if self.proc.poll() is not None:
-            self._fail_from_output("\n".join(self._out))
-            return
-        self.state = "active"
-        self.engine.log(
-            f"[iOS17] spoofing ON → {self.cfg.get('place') or ''}"
-            f"{self.last[0]:.5f}, {self.last[1]:.5f}"
-        )
-        while not self.stop_event.is_set() and self.proc.poll() is None:
-            time.sleep(0.5)
-        if not self.stop_event.is_set():
-            self._fail_from_output("\n".join(self._out))
-            return
-        self.state = "stopped"
-        self.engine.log("[iOS17] spoofing OFF — real GPS restored")
+    def _run_track(self):
+        """Keep the spoof alive with 1 Hz re-assertion.
 
-    def _run_gpx(self):
-        path = self._gpx_path(f"route-{int(time.time())}.gpx")
+        The simulated fix is re-applied every second, so the phone's real GPS
+        producing a fresh fix can't win for long — this is what stops the
+        flicker back to the real location.  If the tunnel blips, the session
+        reconnects on its own instead of failing.
+        """
+        self.motion = None
+        path = self._gpx_path(f"track-{int(time.time())}.gpx")
         self._write_gpx(path)
-        self.engine.log(f"[iOS17] generated movement track: {path.name}")
+        self.state = "active"
+        on_msg = (
+            f"[iOS17] spoofing ON → {self.cfg.get('place') or ''}"
+            f"{self.last[0]:.5f}, {self.last[1]:.5f} (re-asserted every second)"
+        )
+        self.engine.log(on_msg, "good")
+        consecutive = 0
         while not self.stop_event.is_set():
             self._out = []
+            started = time.time()
             self.proc = self._launch(gpx=path)
             pump = threading.Thread(target=self._pump, args=(self.proc,), daemon=True)
             pump.start()
-            self.state = "active"
-            started = time.time()
             while not self.stop_event.is_set() and self.proc.poll() is None:
                 time.sleep(0.5)
             if self.stop_event.is_set():
                 break
+            uptime = time.time() - started
             output = "\n".join(self._out)
-            if self.proc.returncode != 0 or "ERROR" in output or time.time() - started < 10:
+            if uptime >= 300:
+                consecutive = 0
+            consecutive += 1
+            msg = _cli_failure_message(output) or "tunnel blip — reconnecting"
+            if consecutive >= 8:
                 self._fail_from_output(output)
+                self.engine.log(f"[iOS17] giving up after {consecutive} reconnect attempts.", "error")
                 return
-            self.engine.log("[iOS17] track finished — regenerating and reconnecting…")
+            self.engine.log(f"[iOS17] {msg} — reconnecting (#{consecutive})…", "warn")
+            if "disappeared from USB" in msg or "not connected" in msg.lower():
+                # the phone physically left USB — wait for it instead of dying
+                self.engine.log("[iOS17] waiting for the iPhone to come back on USB…", "warn")
+                if self._wait_for_device(120):
+                    self.engine.log("[iOS17] iPhone is back — resuming the spoof.", "good")
+                    consecutive = 0
+                else:
+                    self.error = ("The iPhone stayed disconnected from USB for "
+                                  "2 minutes. Replug the cable (try a different "
+                                  "port), then press START.")
+                    self.state = "failed"
+                    self.engine.log(f"[iOS17] {self.error}", "error")
+                    return
+            time.sleep(min(3.0, 0.5 * consecutive))
             try:
                 self._write_gpx(path)
             except Exception as e:
                 self.engine.log(f"[iOS17] could not regenerate track: {e}", "error")
-                break
         self.state = "stopped"
         self.engine.log("[iOS17] spoofing OFF — real GPS restored")
+
+    def _wait_for_device(self, timeout):
+        from pymobiledevice3.usbmux import list_devices as _list_devices
+
+        end = time.time() + timeout
+        while time.time() < end and not self.stop_event.is_set():
+            try:
+                devices = asyncio.run(_list_devices())
+                if any(d.serial == self.device["id"] for d in devices):
+                    return True
+            except Exception:
+                pass
+            time.sleep(3)
+        return False
 
 
 def start_session(engine, device, cfg):
