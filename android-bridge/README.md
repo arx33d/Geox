@@ -1,7 +1,7 @@
 # Geox Bridge (Android companion app)
 
 A tiny app that receives coordinates from the Geox desktop app over ADB and
-injects them into Android as **mock GPS fixes**. It has no UI to operate —
+injects them into Android as **mock GPS fixes**. It has no UI to operate:
 everything is controlled from the PC.
 
 Full instructions: see `../EXPLANATION.md` → "Android setup".
