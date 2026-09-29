@@ -67,3 +67,10 @@ you use it may not be — faking attendance, cheating delivery or ride apps, or
 deceiving people whose safety depends on your location can be fraud, a
 terms-of-service violation, or worse. Provided as-is, for personal and lawful
 use. You are responsible for what you do with it.
+
+## License
+
+Geox is free to use, modify, and redistribute — **but not to sell**. It's
+licensed under MIT with a Commons Clause addendum: anyone may use it, change
+it, and share it for free, but nobody may sell the software itself or charge
+for it. Donations and free distribution are fine. See [LICENSE](LICENSE).
