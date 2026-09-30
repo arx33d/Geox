@@ -39,6 +39,8 @@ geox --status           # Check active spoofing sessions
 
 `run_geox.bat` and `geox.bat` need nothing pre-installed: if Python is missing it downloads a private copy (about 11 MB) plus the app's dependencies automatically. To share Geox with someone, zip this folder and send it; the first run sets everything up (internet required).
 
+Tip to never see a Windows security warning: before extracting the downloaded zip, right-click it, choose Properties, tick Unblock, then extract. No prompt at all, ever. Cloning the repo with git instead of downloading the zip also avoids it completely.
+
 Keep the terminal window open: it *is* the connection to the phone. Pressing **Ctrl+C** (or the red STOP button) restores the real GPS immediately.
 
 ## 2. One-time setup
