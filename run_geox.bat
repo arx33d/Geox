@@ -13,14 +13,14 @@ rem ============================================================
 rem ---------- 1) existing venv: fastest path ----------
 if exist ".venv\Scripts\python.exe" (
   ".venv\Scripts\python.exe" -m pip install --quiet -r requirements.txt
-  ".venv\Scripts\python.exe" -m geox.server
+  ".venv\Scripts\python.exe" -m geox.launch
   goto done
 )
 
 rem ---------- 2) private runtime downloaded by a previous run ----------
 if exist "runtime\python.exe" (
   "runtime\python.exe" -m pip install --quiet -r requirements.txt
-  "runtime\python.exe" -m geox.server
+  "runtime\python.exe" -m geox.launch
   goto done
 )
 
@@ -66,7 +66,7 @@ if errorlevel 1 (
   pause
   goto done
 )
-"runtime\python.exe" -m geox.server
+"runtime\python.exe" -m geox.launch
 goto done
 
 :venv_ready
@@ -77,7 +77,7 @@ if errorlevel 1 (
   pause
   goto done
 )
-".venv\Scripts\python.exe" -m geox.server
+".venv\Scripts\python.exe" -m geox.launch
 goto done
 
 :done
