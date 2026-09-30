@@ -53,21 +53,21 @@ const MAP_THEMES = {
     url: "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}",
     options: { attribution: "Tiles &copy; Esri &mdash; Esri, DeLorme, NAVTEQ", maxNativeZoom: 16, maxZoom: 19 },
   },
-  "carto-dark": {
-    url: "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png",
-    options: { attribution: "&copy; OpenStreetMap contributors &copy; CARTO", subdomains: "abcd", maxZoom: 19 },
+  "esri-satellite": {
+    url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+    options: { attribution: "Tiles &copy; Esri", maxNativeZoom: 18, maxZoom: 19 },
   },
   "esri-streets": {
     url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}",
     options: { attribution: "Tiles &copy; Esri", maxNativeZoom: 18, maxZoom: 19 },
   },
-  "osm-standard": {
-    url: "https://tile.openstreetmap.org/{z}/{y}/{x}.png",
-    options: { attribution: "&copy; OpenStreetMap contributors", maxZoom: 19 },
-  },
-  "esri-satellite": {
-    url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+  "esri-topo": {
+    url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Topo_Map/MapServer/tile/{z}/{y}/{x}",
     options: { attribution: "Tiles &copy; Esri", maxNativeZoom: 18, maxZoom: 19 },
+  },
+  "esri-light": {
+    url: "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}",
+    options: { attribution: "Tiles &copy; Esri", maxNativeZoom: 16, maxZoom: 19 },
   },
 };
 
