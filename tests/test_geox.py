@@ -189,6 +189,10 @@ class TestOfflineCapabilities(unittest.TestCase):
         self.assertIn("disk_free_gb", data)
         self.assertTrue(data.get("disk_free_gb", 0) > 0)
 
+        res2 = self.client.post("/api/offline/status")
+        self.assertEqual(res2.status_code, 200)
+        self.assertTrue(res2.get_json().get("disk_free_gb", 0) > 0)
+
     def test_offline_estimate_api(self):
         res = self.client.get("/api/offline/estimate?region_type=world&weight=moderate")
         self.assertEqual(res.status_code, 200)
@@ -197,11 +201,24 @@ class TestOfflineCapabilities(unittest.TestCase):
         self.assertIn("size_formatted", data)
         self.assertIn("has_space", data)
 
+        res_post = self.client.post("/api/offline/estimate", json={"region_type": "world", "weight": "full"})
+        self.assertEqual(res_post.status_code, 200)
+        data_post = res_post.get_json()
+        self.assertEqual(data_post.get("tile_count"), 87381)
+
         res2 = self.client.get("/api/offline/estimate?region_type=country&weight=heavy&country=France")
         self.assertEqual(res2.status_code, 200)
         data2 = res2.get_json()
         self.assertTrue(data2.get("tile_count") > 0)
         self.assertIn("size_formatted", data2)
+
+        # Test bounds normalization with reversed min/max
+        res_bounds = self.client.post(
+            "/api/offline/estimate",
+            json={"region_type": "viewport", "weight": "moderate", "bounds": [50.0, 10.0, 40.0, -5.0]},
+        )
+        self.assertEqual(res_bounds.status_code, 200)
+        self.assertTrue(res_bounds.get_json().get("tile_count") > 0)
 
     def test_offline_regions_api(self):
         res = self.client.get("/api/offline/regions?q=United")
@@ -210,6 +227,11 @@ class TestOfflineCapabilities(unittest.TestCase):
         names = [x["name"] for x in data.get("results", [])]
         self.assertIn("United States", names)
         self.assertIn("United Kingdom", names)
+
+        res_post = self.client.post("/api/offline/regions", json={"q": "France"})
+        self.assertEqual(res_post.status_code, 200)
+        names_post = [x["name"] for x in res_post.get_json().get("results", [])]
+        self.assertIn("France", names_post)
 
     def test_offline_clear_api(self):
         res1 = self.client.post("/api/offline/clear")

@@ -73,6 +73,8 @@ COUNTRIES_BBOX: dict[str, list[float]] = {
 
 def deg2num(lat_deg: float, lon_deg: float, zoom: int) -> tuple[int, int]:
     """Convert WGS84 lat/lon to Web Mercator tile x, y."""
+    lat_deg = max(-85.0511, min(85.0511, float(lat_deg)))
+    lon_deg = max(-180.0, min(180.0, float(lon_deg)))
     lat_rad = math.radians(lat_deg)
     n = 2.0 ** zoom
     xtile = int((lon_deg + 180.0) / 360.0 * n)
@@ -203,7 +205,10 @@ def calculate_estimate(
         target_zoom = zoom_map.get(weight, 7)
         tile_count = sum(4 ** z for z in range(target_zoom + 1))
     elif region_type in ("country", "bounds", "region", "viewport") and bounds and len(bounds) == 4:
-        min_lat, min_lng, max_lat, max_lng = bounds
+        min_lat = min(float(bounds[0]), float(bounds[2]))
+        max_lat = max(float(bounds[0]), float(bounds[2]))
+        min_lng = min(float(bounds[1]), float(bounds[3]))
+        max_lng = max(float(bounds[1]), float(bounds[3]))
         zoom_map = {"light": 8, "moderate": 10, "heavy": 12, "full": 14}
         target_zoom = zoom_map.get(weight, 10)
         min_z = max(0, target_zoom - 4)
@@ -339,7 +344,10 @@ class TileDownloader:
                         tiles.append((z, x, y))
 
         elif package in ("country", "bounds", "region", "viewport") and bounds and len(bounds) == 4:
-            min_lat, min_lng, max_lat, max_lng = bounds
+            min_lat = min(float(bounds[0]), float(bounds[2]))
+            max_lat = max(float(bounds[0]), float(bounds[2]))
+            min_lng = min(float(bounds[1]), float(bounds[3]))
+            max_lng = max(float(bounds[1]), float(bounds[3]))
             zoom_map = {"light": 8, "moderate": 10, "heavy": 12, "full": 14}
             target_zoom = max_zoom if max_zoom is not None else zoom_map.get(weight, 10)
             min_z = max(0, target_zoom - 4)

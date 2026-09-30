@@ -28,6 +28,10 @@ const DEFAULT_SETTINGS = {
   defaultRoamSpeed: 4.5,
   defaultTripFactor: 1.0,
   offlineMode: false,
+  offlineWeight: "moderate",
+  offlineRegion: "world",
+  offlineMapStyle: "topo",
+  offlineCountry: "United States",
 };
 
 let userSettings = Object.assign({}, DEFAULT_SETTINGS);
@@ -1128,6 +1132,230 @@ function initSettingsUI() {
 
   if (!modal || !btn) return;
 
+  const COUNTRIES_DATA = {
+    "United States": [24.3963, -125.0, 49.3844, -66.9346],
+    "Canada": [41.6766, -141.0019, 83.1106, -52.6481],
+    "United Kingdom": [49.8238, -8.6493, 60.8605, 1.7689],
+    "France": [41.333, -5.142, 51.089, 9.56],
+    "Germany": [47.2701, 5.8663, 55.0583, 15.0418],
+    "Japan": [24.0457, 122.9345, 45.5515, 153.9866],
+    "Australia": [-43.6345, 113.3389, -10.6681, 153.5694],
+    "Italy": [36.6199, 6.6272, 47.092, 18.5204],
+    "Spain": [36.0001, -9.3015, 43.7915, 4.3278],
+    "Mexico": [14.5388, -118.404, 32.7186, -86.7104],
+    "Brazil": [-33.75, -73.98, 5.27, -34.79],
+    "India": [8.0667, 68.1167, 37.0833, 97.4],
+    "China": [18.1536, 73.4997, 53.5609, 134.7754],
+    "Switzerland": [45.818, 5.9559, 47.8084, 10.4923],
+    "Netherlands": [50.7504, 3.3316, 53.555, 7.2275],
+    "Belgium": [49.497, 2.544, 51.505, 6.408],
+    "Sweden": [55.3369, 11.0274, 69.06, 24.167],
+    "Norway": [57.9622, 4.636, 71.1855, 31.077],
+    "Poland": [49.002, 14.1229, 54.836, 24.1458],
+    "South Korea": [33.1, 125.0, 38.6, 129.6],
+    "New Zealand": [-47.2899, 166.4261, -34.4288, 178.6146],
+    "Argentina": [-55.0574, -73.577, -21.7812, -53.6375],
+    "South Africa": [-34.8333, 16.45, -22.1265, 32.8906],
+    "United Arab Emirates": [22.6333, 51.5833, 26.0667, 56.3833],
+    "Singapore": [1.1304, 103.602, 1.4504, 104.012],
+    "Hong Kong": [22.1534, 113.835, 22.562, 114.407],
+    "Ireland": [51.419, -10.663, 55.435, -5.996],
+    "Austria": [46.3723, 9.5307, 49.0206, 17.1607],
+    "Portugal": [36.961, -9.5005, 42.154, -6.189],
+    "Greece": [34.802, 19.373, 41.748, 28.246],
+    "Turkey": [35.813, 25.663, 42.107, 44.817],
+    "Egypt": [22.0, 24.7, 31.7, 36.9],
+    "Saudi Arabia": [16.38, 34.5, 32.15, 55.67],
+    "Indonesia": [-11.0, 95.0, 6.07, 141.0],
+    "Philippines": [4.58, 116.93, 21.13, 126.6],
+    "Thailand": [5.61, 97.34, 20.46, 105.64],
+    "Vietnam": [8.56, 102.14, 23.39, 109.46],
+  };
+
+  function deg2numClient(lat, lon, zoom) {
+    const latClamped = Math.max(-85.0511, Math.min(85.0511, lat));
+    const lonClamped = Math.max(-180.0, Math.min(180.0, lon));
+    const latRad = (latClamped * Math.PI) / 180.0;
+    const n = Math.pow(2, zoom);
+    const xtile = Math.floor(((lonClamped + 180.0) / 360.0) * n);
+    const ytile = Math.floor((1.0 - Math.asinh(Math.tan(latRad)) / Math.PI) / 2.0 * n);
+    return [Math.max(0, Math.min(n - 1, xtile)), Math.max(0, Math.min(n - 1, ytile))];
+  }
+
+  function calculateEstimateClient(regionType, weight, bounds) {
+    let tileCount = 0;
+    const zoomWeights = {
+      world: { light: 5, moderate: 6, heavy: 7, full: 8 },
+      world_ext: { light: 6, moderate: 7, heavy: 8, full: 9 },
+      bounds: { light: 8, moderate: 10, heavy: 12, full: 14 },
+    };
+
+    if (regionType === "world" || regionType === "global" || regionType === "global_base") {
+      const targetZoom = (zoomWeights.world[weight] !== undefined) ? zoomWeights.world[weight] : 6;
+      for (let z = 0; z <= targetZoom; z++) {
+        tileCount += Math.pow(4, z);
+      }
+    } else if (regionType === "world_ext" || regionType === "global_extended") {
+      const targetZoom = (zoomWeights.world_ext[weight] !== undefined) ? zoomWeights.world_ext[weight] : 7;
+      for (let z = 0; z <= targetZoom; z++) {
+        tileCount += Math.pow(4, z);
+      }
+    } else if ((regionType === "country" || regionType === "viewport" || regionType === "bounds" || regionType === "region") && bounds && bounds.length === 4) {
+      let minLat = Math.min(Number(bounds[0]), Number(bounds[2]));
+      let maxLat = Math.max(Number(bounds[0]), Number(bounds[2]));
+      let minLng = Math.min(Number(bounds[1]), Number(bounds[3]));
+      let maxLng = Math.max(Number(bounds[1]), Number(bounds[3]));
+      const targetZoom = (zoomWeights.bounds[weight] !== undefined) ? zoomWeights.bounds[weight] : 10;
+      const minZ = Math.max(0, targetZoom - 4);
+      for (let z = minZ; z <= targetZoom; z++) {
+        const [x1, y2] = deg2numClient(minLat, minLng, z);
+        const [x2, y1] = deg2numClient(maxLat, maxLng, z);
+        const xmin = Math.min(x1, x2), xmax = Math.max(x1, x2);
+        const ymin = Math.min(y1, y2), ymax = Math.max(y1, y2);
+        tileCount += (xmax - xmin + 1) * (ymax - ymin + 1);
+      }
+    } else {
+      tileCount = 5461;
+    }
+
+    const estBytes = tileCount * 15 * 1024;
+    const estMb = estBytes / (1024 * 1024);
+    let sizeFormatted = "";
+    if (estMb >= 1024) {
+      sizeFormatted = `${(estMb / 1024).toFixed(2)} GB`;
+    } else {
+      sizeFormatted = estMb >= 10 ? `${Math.round(estMb)} MB` : `${estMb.toFixed(1)} MB`;
+    }
+
+    const weightDescriptions = {
+      light: "Lightweight: Basemap overview, borders, major topography, and primary highways.",
+      moderate: "Moderate Weight: Regional road network, state/provincial routes, elevation contours, and towns.",
+      heavy: "Heavy Weight: High-density road network, local connectors, municipal roads, and detailed terrain.",
+      full: "Full Map (Maximum Detail): Complete street network including all available local streets, neighborhood roads, and maximum cartographic detail.",
+    };
+
+    return {
+      tileCount,
+      tileCountFormatted: tileCount.toLocaleString(),
+      estimatedMb: Math.round(estMb * 10) / 10,
+      sizeFormatted,
+      description: weightDescriptions[weight] || weightDescriptions.moderate,
+    };
+  }
+
+  let selectedCountry = {
+    name: userSettings.offlineCountry || "United States",
+    bounds: COUNTRIES_DATA[userSettings.offlineCountry] || COUNTRIES_DATA["United States"],
+  };
+  let lastKnownDiskFreeGB = null;
+  let countrySearchDebounce = null;
+
+  function updateDownloadEstimate() {
+    const weightEl = $("offlineWeight");
+    const regionEl = $("offlineRegion");
+    if (!weightEl || !regionEl) return;
+
+    const weight = weightEl.value || "moderate";
+    const region = regionEl.value || "world";
+
+    const countryWrap = $("countrySearchContainer");
+    if (countryWrap) {
+      const isCountry = (region === "country");
+      countryWrap.classList.toggle("hidden", !isCountry);
+      if (isCountry && selectedCountry) {
+        if ($("selectedCountryBadge")) $("selectedCountryBadge").textContent = `Selected: ${selectedCountry.name}`;
+        if ($("countrySearchInput") && !$("countrySearchInput").value) {
+          $("countrySearchInput").value = selectedCountry.name;
+        }
+      }
+    }
+
+    let bounds = null;
+    if (region === "viewport") {
+      const b = map.getBounds();
+      bounds = [
+        Math.max(-85.0511, Math.min(85.0511, b.getSouth())),
+        Math.max(-180.0, Math.min(180.0, b.getWest())),
+        Math.max(-85.0511, Math.min(85.0511, b.getNorth())),
+        Math.max(-180.0, Math.min(180.0, b.getEast())),
+      ];
+    } else if (region === "country") {
+      if (!selectedCountry) {
+        selectedCountry = { name: "United States", bounds: COUNTRIES_DATA["United States"] };
+      }
+      bounds = selectedCountry.bounds || COUNTRIES_DATA[selectedCountry.name] || COUNTRIES_DATA["United States"];
+    }
+
+    // 1. Instant zero-latency client calculation
+    const clientEst = calculateEstimateClient(region, weight, bounds);
+    if ($("estSizeVal")) $("estSizeVal").textContent = `~${clientEst.sizeFormatted}`;
+    if ($("estTilesVal")) $("estTilesVal").textContent = clientEst.tileCountFormatted;
+    if ($("estDescVal")) $("estDescVal").textContent = clientEst.description;
+
+    const badge = $("offlineEstimateBadge");
+    if (lastKnownDiskFreeGB !== null) {
+      if ($("estDiskVal")) $("estDiskVal").textContent = `${lastKnownDiskFreeGB} GB free`;
+      const neededGB = clientEst.estimatedMb / 1024;
+      const hasSpace = lastKnownDiskFreeGB > (neededGB + 0.5);
+      if (badge) {
+        badge.textContent = hasSpace ? "Ready to download" : "Low disk space";
+        badge.classList.toggle("warn", !hasSpace);
+      }
+    } else {
+      if ($("estDiskVal") && ($("estDiskVal").textContent === "--" || $("estDiskVal").textContent === "Available")) {
+        $("estDiskVal").textContent = "Available";
+      }
+      if (badge) {
+        badge.textContent = "Ready to download";
+        badge.classList.remove("warn");
+      }
+    }
+
+    // 2. Enrich asynchronously with server disk info
+    api("/api/offline/estimate", {
+      region_type: region,
+      weight: weight,
+      country: (region === "country" && selectedCountry) ? selectedCountry.name : null,
+      bounds: bounds,
+    }).then((res) => {
+      if (!res) return;
+      if (res.disk_free_gb !== undefined) {
+        lastKnownDiskFreeGB = res.disk_free_gb;
+      }
+      if ($("estSizeVal") && res.size_formatted) $("estSizeVal").textContent = `~${res.size_formatted}`;
+      if ($("estTilesVal") && res.tile_count_formatted) $("estTilesVal").textContent = res.tile_count_formatted;
+      if ($("estDiskVal") && res.disk_free_formatted) $("estDiskVal").textContent = `${res.disk_free_formatted} free`;
+      if ($("estDescVal") && res.description) $("estDescVal").textContent = res.description;
+      if (badge && res.has_space !== undefined) {
+        badge.textContent = res.has_space ? "Ready to download" : "Low disk space";
+        badge.classList.toggle("warn", !res.has_space);
+      }
+    }).catch(() => {
+      // Client calculation already displayed; offline resilience guaranteed
+    });
+  }
+
+  function selectCountryByName(name) {
+    const trimmed = (name || "").trim();
+    if (!trimmed) return;
+    let matchName = Object.keys(COUNTRIES_DATA).find((k) => k.toLowerCase() === trimmed.toLowerCase());
+    if (!matchName) {
+      matchName = Object.keys(COUNTRIES_DATA).find((k) => k.toLowerCase().startsWith(trimmed.toLowerCase()));
+    }
+    if (!matchName) {
+      matchName = Object.keys(COUNTRIES_DATA).find((k) => k.toLowerCase().includes(trimmed.toLowerCase()));
+    }
+    if (matchName) {
+      selectedCountry = { name: matchName, bounds: COUNTRIES_DATA[matchName] };
+      userSettings.offlineCountry = matchName;
+      saveSettings();
+      if ($("countrySearchInput")) $("countrySearchInput").value = matchName;
+      if ($("selectedCountryBadge")) $("selectedCountryBadge").textContent = `Selected: ${matchName}`;
+      if ($("countrySearchResults")) $("countrySearchResults").classList.add("hidden");
+      updateDownloadEstimate();
+    }
+  }
+
   function syncSettingsInputs() {
     if ($("settingMapTheme")) $("settingMapTheme").value = userSettings.mapTheme;
     if ($("settingAutoCenter")) $("settingAutoCenter").checked = !!userSettings.autoCenter;
@@ -1137,22 +1365,29 @@ function initSettingsUI() {
     if ($("settingDefaultTripFactor")) $("settingDefaultTripFactor").value = userSettings.defaultTripFactor;
     if ($("settingOfflineMode")) $("settingOfflineMode").checked = !!userSettings.offlineMode;
 
+    if ($("offlineWeight") && userSettings.offlineWeight) $("offlineWeight").value = userSettings.offlineWeight;
+    if ($("offlineRegion") && userSettings.offlineRegion) $("offlineRegion").value = userSettings.offlineRegion;
+    if ($("offlineMapStyle") && userSettings.offlineMapStyle) $("offlineMapStyle").value = userSettings.offlineMapStyle;
+
+    if (userSettings.offlineCountry && COUNTRIES_DATA[userSettings.offlineCountry]) {
+      selectedCountry = { name: userSettings.offlineCountry, bounds: COUNTRIES_DATA[userSettings.offlineCountry] };
+    }
+
     document.querySelectorAll("#settingUnitsControl .seg-btn").forEach((b) => {
       b.classList.toggle("on", b.dataset.val === userSettings.units);
     });
     document.querySelectorAll("#settingPollInterval .seg-btn").forEach((b) => {
       b.classList.toggle("on", +b.dataset.val === userSettings.pollInterval);
     });
+
+    updateDownloadEstimate();
   }
 
   function openSettings() {
     syncSettingsInputs();
     modal.classList.remove("hidden");
-    const activeTab = document.querySelector("#settingsTabButtons .settings-tab-btn.on");
-    if (activeTab && activeTab.dataset.target === "tabOffline") {
-      refreshOfflineStats();
-      updateDownloadEstimate();
-    }
+    refreshOfflineStats();
+    updateDownloadEstimate();
   }
 
   function closeSettings() {
@@ -1190,98 +1425,75 @@ function initSettingsUI() {
     });
   });
 
-  // Offline country/region state
-  let selectedCountry = { name: "United States", bounds: [24.3963, -125.0, 49.3844, -66.9346] };
-  let countrySearchDebounce = null;
-
-  async function updateDownloadEstimate() {
-    const weightEl = $("offlineWeight");
-    const regionEl = $("offlineRegion");
-    if (!weightEl || !regionEl) return;
-
-    const weight = weightEl.value || "moderate";
-    const region = regionEl.value || "world";
-
-    const countryWrap = $("countrySearchContainer");
-    if (countryWrap) {
-      countryWrap.classList.toggle("hidden", region !== "country");
-    }
-
-    let bounds = null;
-    if (region === "viewport") {
-      const b = map.getBounds();
-      bounds = [b.getSouth(), b.getWest(), b.getNorth(), b.getEast()];
-    } else if (region === "country" && selectedCountry) {
-      bounds = selectedCountry.bounds;
-    }
-
-    try {
-      const res = await api("/api/offline/estimate", {
-        region_type: region,
-        weight: weight,
-        country: (region === "country" && selectedCountry) ? selectedCountry.name : null,
-        bounds: bounds,
-      });
-
-      if ($("estSizeVal")) $("estSizeVal").textContent = `~${res.size_formatted}`;
-      if ($("estTilesVal")) $("estTilesVal").textContent = res.tile_count_formatted;
-      if ($("estDiskVal")) $("estDiskVal").textContent = `${res.disk_free_formatted} free`;
-      if ($("estDescVal")) $("estDescVal").textContent = res.description;
-
-      const badge = $("offlineEstimateBadge");
-      if (badge) {
-        if (res.has_space) {
-          badge.textContent = "Ready to download";
-          badge.classList.remove("warn");
-        } else {
-          badge.textContent = "Low disk space";
-          badge.classList.add("warn");
-        }
-      }
-    } catch {
-      // Non-blocking estimate failure
-    }
-  }
-
   // Country search handling
   if ($("countrySearchInput")) {
-    $("countrySearchInput").addEventListener("input", () => {
-      clearTimeout(countrySearchDebounce);
-      const q = $("countrySearchInput").value.trim();
-      const resEl = $("countrySearchResults");
+    const inputEl = $("countrySearchInput");
+    const resEl = $("countrySearchResults");
+
+    const renderMatches = (matches) => {
+      if (!resEl) return;
+      if (!matches || !matches.length) {
+        resEl.innerHTML = `<div class="res muted">No countries found</div>`;
+      } else {
+        resEl.innerHTML = matches.map((c) =>
+          `<div class="res" data-name="${c.name}">${c.name}</div>`
+        ).join("");
+        resEl.querySelectorAll(".res").forEach((el) => {
+          el.addEventListener("click", () => {
+            selectCountryByName(el.dataset.name);
+          });
+        });
+      }
+      resEl.classList.remove("hidden");
+    };
+
+    inputEl.addEventListener("input", () => {
+      const q = inputEl.value.trim().toLowerCase();
       if (!resEl) return;
       if (q.length < 1) {
         resEl.classList.add("hidden");
         return;
       }
+
+      // 1. Instant local filter
+      const localMatches = Object.keys(COUNTRIES_DATA)
+        .filter((k) => k.toLowerCase().includes(q))
+        .slice(0, 8)
+        .map((name) => ({ name, bounds: COUNTRIES_DATA[name] }));
+      renderMatches(localMatches);
+
+      // 2. Debounced API filter
+      clearTimeout(countrySearchDebounce);
       countrySearchDebounce = setTimeout(async () => {
         try {
           const data = await api(`/api/offline/regions?q=${encodeURIComponent(q)}`);
-          if (!data.results || !data.results.length) {
-            resEl.innerHTML = `<div class="res muted">No countries found</div>`;
-          } else {
-            resEl.innerHTML = data.results.map((c) =>
-              `<div class="res" data-name="${c.name}">${c.name}</div>`
-            ).join("");
-            resEl.querySelectorAll(".res").forEach((el) => {
-              el.addEventListener("click", () => {
-                const name = el.dataset.name;
-                const match = data.results.find((x) => x.name === name);
-                if (match) {
-                  selectedCountry = match;
-                  if ($("selectedCountryBadge")) $("selectedCountryBadge").textContent = `Selected: ${match.name}`;
-                  $("countrySearchInput").value = match.name;
-                  resEl.classList.add("hidden");
-                  updateDownloadEstimate();
-                }
-              });
-            });
+          if (data && data.results && data.results.length) {
+            renderMatches(data.results);
           }
-          resEl.classList.remove("hidden");
         } catch {
-          resEl.classList.add("hidden");
+          // Local matches already active
         }
-      }, 200);
+      }, 250);
+    });
+
+    inputEl.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        selectCountryByName(inputEl.value);
+      }
+    });
+
+    if ($("countrySearchBtn")) {
+      $("countrySearchBtn").addEventListener("click", (e) => {
+        e.preventDefault();
+        selectCountryByName(inputEl.value);
+      });
+    }
+
+    document.addEventListener("click", (e) => {
+      if (resEl && !resEl.contains(e.target) && e.target !== inputEl && e.target !== $("countrySearchBtn")) {
+        resEl.classList.add("hidden");
+      }
     });
 
     if ($("selectedCountryBadge") && selectedCountry) {
@@ -1290,15 +1502,29 @@ function initSettingsUI() {
   }
 
   if ($("offlineWeight")) {
-    $("offlineWeight").addEventListener("change", updateDownloadEstimate);
-  }
-  if ($("offlineRegion")) {
-    $("offlineRegion").addEventListener("change", () => {
-      if ($("offlineRegion").value === "country" && !selectedCountry) {
-        selectedCountry = { name: "United States", bounds: [24.3963, -125.0, 49.3844, -66.9346] };
-        if ($("selectedCountryBadge")) $("selectedCountryBadge").textContent = "Selected: United States";
-      }
+    $("offlineWeight").addEventListener("change", (e) => {
+      userSettings.offlineWeight = e.target.value;
+      saveSettings();
       updateDownloadEstimate();
+    });
+  }
+
+  if ($("offlineRegion")) {
+    $("offlineRegion").addEventListener("change", (e) => {
+      userSettings.offlineRegion = e.target.value;
+      if (e.target.value === "country" && !selectedCountry) {
+        selectedCountry = { name: "United States", bounds: COUNTRIES_DATA["United States"] };
+        userSettings.offlineCountry = "United States";
+      }
+      saveSettings();
+      updateDownloadEstimate();
+    });
+  }
+
+  if ($("offlineMapStyle")) {
+    $("offlineMapStyle").addEventListener("change", (e) => {
+      userSettings.offlineMapStyle = e.target.value;
+      saveSettings();
     });
   }
 
@@ -1307,6 +1533,9 @@ function initSettingsUI() {
   async function refreshOfflineStats() {
     try {
       const res = await api("/api/offline/status");
+      if (res && res.disk_free_gb !== undefined) {
+        lastKnownDiskFreeGB = res.disk_free_gb;
+      }
       if ($("offlineStorageBadge")) {
         const freeText = res.disk_free_formatted ? ` · ${res.disk_free_formatted} available` : "";
         $("offlineStorageBadge").textContent = `${res.size_formatted} used${freeText}`;
@@ -1316,6 +1545,9 @@ function initSettingsUI() {
       }
       if ($("offlineDiskLeftText")) {
         $("offlineDiskLeftText").textContent = `Disk available: ${res.disk_free_formatted || "--"}`;
+      }
+      if ($("estDiskVal") && res.disk_free_formatted) {
+        $("estDiskVal").textContent = `${res.disk_free_formatted} free`;
       }
 
       const progCard = $("offlineProgressCard");
@@ -1362,7 +1594,7 @@ function initSettingsUI() {
         setMapTheme("offline");
         toast("Offline map mode enabled (using local cache)", "ok");
       } else {
-        setMapTheme(userSettings.mapTheme);
+        setMapTheme(userSettings.mapTheme === "offline" ? "esri-dark" : userSettings.mapTheme);
         toast("Online map mode restored", "ok");
       }
     });
@@ -1378,9 +1610,17 @@ function initSettingsUI() {
       let bounds = null;
       if (region === "viewport") {
         const b = map.getBounds();
-        bounds = [b.getSouth(), b.getWest(), b.getNorth(), b.getEast()];
-      } else if (region === "country" && selectedCountry) {
-        bounds = selectedCountry.bounds;
+        bounds = [
+          Math.max(-85.0511, Math.min(85.0511, b.getSouth())),
+          Math.max(-180.0, Math.min(180.0, b.getWest())),
+          Math.max(-85.0511, Math.min(85.0511, b.getNorth())),
+          Math.max(-180.0, Math.min(180.0, b.getEast())),
+        ];
+      } else if (region === "country") {
+        if (!selectedCountry) {
+          selectedCountry = { name: "United States", bounds: COUNTRIES_DATA["United States"] };
+        }
+        bounds = selectedCountry.bounds || COUNTRIES_DATA[selectedCountry.name];
       }
 
       try {

@@ -245,24 +245,28 @@ def api_offline_tile(z, x, y):
     return ("", 404)
 
 
-@app.get("/api/offline/status")
+@app.route("/api/offline/status", methods=["GET", "POST"])
 def api_offline_status():
     return jsonify(get_downloader().status())
 
 
-@app.get("/api/offline/estimate")
-@app.post("/api/offline/estimate")
+@app.route("/api/offline/estimate", methods=["GET", "POST"])
 def api_offline_estimate():
     if request.method == "POST":
         data = request.get_json(force=True, silent=True) or {}
     else:
         data = request.args.to_dict()
-    region_type = data.get("region_type", "world")
+    region_type = data.get("region_type") or data.get("package") or data.get("region") or "world"
     weight = data.get("weight", "moderate")
     bounds = data.get("bounds")
     if isinstance(bounds, str):
         try:
             bounds = [float(x.strip()) for x in bounds.split(",")]
+        except Exception:
+            bounds = None
+    elif isinstance(bounds, (list, tuple)) and len(bounds) == 4:
+        try:
+            bounds = [float(x) for x in bounds]
         except Exception:
             bounds = None
     country = data.get("country")
@@ -273,9 +277,13 @@ def api_offline_estimate():
     return jsonify(calculate_estimate(region_type=region_type, weight=weight, bounds=bounds))
 
 
-@app.get("/api/offline/regions")
+@app.route("/api/offline/regions", methods=["GET", "POST"])
 def api_offline_regions():
-    q = request.args.get("q", "")
+    if request.method == "POST":
+        data = request.get_json(force=True, silent=True) or {}
+        q = data.get("q", "")
+    else:
+        q = request.args.get("q", "")
     return jsonify(results=search_countries(q))
 
 
