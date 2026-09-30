@@ -27,6 +27,7 @@ const DEFAULT_SETTINGS = {
   defaultRadius: 120,
   defaultRoamSpeed: 4.5,
   defaultTripFactor: 1.0,
+  offlineMode: false,
 };
 
 let userSettings = Object.assign({}, DEFAULT_SETTINGS);
@@ -69,6 +70,10 @@ const MAP_THEMES = {
     url: "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}",
     options: { attribution: "Tiles &copy; Esri", maxNativeZoom: 16, maxZoom: 19 },
   },
+  "offline": {
+    url: "/api/offline/tiles/{z}/{x}/{y}.jpg",
+    options: { attribution: "Offline Tiles &copy; Esri / Geox", maxNativeZoom: 16, maxZoom: 19 },
+  },
 };
 
 let currentTileLayer = null;
@@ -80,7 +85,7 @@ function setMapTheme(themeKey) {
   currentTileLayer = L.tileLayer(theme.url, theme.options).addTo(map);
   currentTileLayer.bringToBack();
 }
-setMapTheme(userSettings.mapTheme);
+setMapTheme(userSettings.offlineMode ? "offline" : userSettings.mapTheme);
 
 const targetIcon = L.divIcon({
   className: "",
@@ -333,7 +338,65 @@ document.addEventListener("click", (e) => {
   if (!$("searchInput").contains(e.target) && !$("searchResults").contains(e.target) && !$("searchBtn").contains(e.target)) {
     $("searchResults").classList.add("hidden");
   }
+  const trRes = $("tripSearchResults");
+  if (trRes && $("tripDestInput") && !$("tripDestInput").contains(e.target) && !trRes.contains(e.target)) {
+    trRes.classList.add("hidden");
+  }
 });
+
+let tripSearchDebounceTimer = null;
+async function doTripDestSearch() {
+  const q = $("tripDestInput").value.trim();
+  const resEl = $("tripSearchResults");
+  if (!resEl) return;
+  if (q.length < 2) {
+    resEl.classList.add("hidden");
+    return;
+  }
+  resEl.classList.remove("hidden");
+  resEl.innerHTML = `<div class="res muted">Searching…</div>`;
+
+  try {
+    const d = await api("/api/geocode", { q });
+    if (!d.results || !d.results.length) {
+      resEl.innerHTML = `<div class="res muted">No places found</div>`;
+      return;
+    }
+    resEl.innerHTML = d.results
+      .map((r) => `<div class="res" data-lat="${r.lat}" data-lng="${r.lng}" data-label="${r.label.replace(/"/g, '&quot;')}">${r.label}</div>`)
+      .join("");
+
+    resEl.querySelectorAll(".res").forEach((el) => {
+      el.addEventListener("click", () => {
+        $("tripDestInput").value = el.dataset.label.split(",")[0];
+        resEl.classList.add("hidden");
+        planTrip();
+      });
+    });
+  } catch (e) {
+    resEl.innerHTML = `<div class="res muted">${e.message}</div>`;
+  }
+}
+
+if ($("tripDestInput")) {
+  $("tripDestInput").addEventListener("input", () => {
+    clearTimeout(tripSearchDebounceTimer);
+    const q = $("tripDestInput").value.trim();
+    if (q.length >= 2) {
+      tripSearchDebounceTimer = setTimeout(doTripDestSearch, 200);
+    } else if ($("tripSearchResults")) {
+      $("tripSearchResults").classList.add("hidden");
+    }
+  });
+
+  $("tripDestInput").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      if ($("tripSearchResults")) $("tripSearchResults").classList.add("hidden");
+      planTrip();
+    }
+  });
+}
 
 const PRESETS = [
   ["McMurdo, Antarctica", -77.8419, 166.6863],
@@ -1072,6 +1135,7 @@ function initSettingsUI() {
     if ($("settingDefaultRadius")) $("settingDefaultRadius").value = userSettings.defaultRadius;
     if ($("settingDefaultRoamSpeed")) $("settingDefaultRoamSpeed").value = userSettings.defaultRoamSpeed;
     if ($("settingDefaultTripFactor")) $("settingDefaultTripFactor").value = userSettings.defaultTripFactor;
+    if ($("settingOfflineMode")) $("settingOfflineMode").checked = !!userSettings.offlineMode;
 
     document.querySelectorAll("#settingUnitsControl .seg-btn").forEach((b) => {
       b.classList.toggle("on", b.dataset.val === userSettings.units);
@@ -1114,14 +1178,143 @@ function initSettingsUI() {
       document.querySelectorAll(".tab-content").forEach((tc) => {
         tc.classList.toggle("hidden", tc.id !== targetId);
       });
+      if (targetId === "tabOffline") {
+        refreshOfflineStats();
+      }
     });
   });
+
+  // Offline stats polling
+  let offlinePollTimer = null;
+  async function refreshOfflineStats() {
+    try {
+      const res = await api("/api/offline/status");
+      if ($("offlineStorageBadge")) {
+        $("offlineStorageBadge").textContent = `${res.size_formatted} / ${res.max_limit_gb} GB limit`;
+      }
+      if ($("offlineTileCountText")) {
+        $("offlineTileCountText").textContent = `Cached tiles: ${res.tile_count.toLocaleString()}`;
+      }
+
+      const progCard = $("offlineProgressCard");
+      const progMsg = $("offlineProgressMsg");
+      const progPct = $("offlineProgressPct");
+      const progFill = $("offlineProgressFill");
+      const startBtn = $("startOfflineDownloadBtn");
+      const cancelBtn = $("cancelOfflineDownloadBtn");
+
+      if (res.downloading) {
+        if (progCard) progCard.classList.remove("hidden");
+        if (progMsg) progMsg.textContent = res.message || "Downloading map pack…";
+        if (progPct) progPct.textContent = `${res.percent}%`;
+        if (progFill) progFill.style.width = `${res.percent}%`;
+        if (startBtn) startBtn.disabled = true;
+        if (cancelBtn) cancelBtn.classList.remove("hidden");
+
+        clearTimeout(offlinePollTimer);
+        offlinePollTimer = setTimeout(refreshOfflineStats, 1000);
+      } else {
+        if (startBtn) startBtn.disabled = false;
+        if (cancelBtn) cancelBtn.classList.add("hidden");
+        if (res.percent === 100) {
+          if (progCard) progCard.classList.remove("hidden");
+          if (progMsg) progMsg.textContent = res.message || "All tiles downloaded and ready offline.";
+          if (progPct) progPct.textContent = "100%";
+          if (progFill) progFill.style.width = "100%";
+        } else if (res.message && res.message.startsWith("Stopped")) {
+          if (progCard) progCard.classList.remove("hidden");
+          if (progMsg) progMsg.textContent = res.message;
+        }
+      }
+    } catch {
+      // offline status failure is non-blocking
+    }
+  }
+
+  // Offline map mode toggle
+  if ($("settingOfflineMode")) {
+    $("settingOfflineMode").addEventListener("change", (e) => {
+      userSettings.offlineMode = !!e.target.checked;
+      saveSettings();
+      if (userSettings.offlineMode) {
+        setMapTheme("offline");
+        toast("Offline map mode enabled (using local cache)", "ok");
+      } else {
+        setMapTheme(userSettings.mapTheme);
+        toast("Online map mode restored", "ok");
+      }
+    });
+  }
+
+  // Offline download action
+  if ($("startOfflineDownloadBtn")) {
+    $("startOfflineDownloadBtn").addEventListener("click", async () => {
+      const pack = $("offlinePackType") ? $("offlinePackType").value : "global_base";
+      const style = $("offlineMapStyle") ? $("offlineMapStyle").value : "topo";
+      let bounds = null;
+      let maxZoom = 6;
+
+      if (pack === "bounds") {
+        const b = map.getBounds();
+        bounds = [b.getSouth(), b.getWest(), b.getNorth(), b.getEast()];
+        maxZoom = Math.min(11, Math.max(7, map.getZoom() + 2));
+      } else if (pack === "global_extended") {
+        maxZoom = 7;
+      }
+
+      try {
+        const res = await api("/api/offline/download", {
+          package: pack,
+          style: style,
+          bounds: bounds,
+          max_zoom: maxZoom,
+        });
+        if (res.error) {
+          toast(res.error, "error");
+          return;
+        }
+        toast("Offline map download started in background.", "ok");
+        refreshOfflineStats();
+      } catch (err) {
+        toast(`Failed to start download: ${err.message}`, "error");
+      }
+    });
+  }
+
+  // Cancel offline download
+  if ($("cancelOfflineDownloadBtn")) {
+    $("cancelOfflineDownloadBtn").addEventListener("click", async () => {
+      try {
+        await api("/api/offline/cancel");
+        toast("Download cancellation requested.", "ok");
+        setTimeout(refreshOfflineStats, 500);
+      } catch (err) {
+        toast(`Error cancelling: ${err.message}`, "error");
+      }
+    });
+  }
+
+  // Clear offline tile cache
+  if ($("clearOfflineCacheBtn")) {
+    $("clearOfflineCacheBtn").addEventListener("click", async () => {
+      if (!confirm("Clear all downloaded offline map tiles? This cannot be undone.")) return;
+      try {
+        await api("/api/offline/clear");
+        toast("Offline map cache cleared.", "ok");
+        refreshOfflineStats();
+      } catch (err) {
+        toast(`Error clearing cache: ${err.message}`, "error");
+      }
+    });
+  }
 
   // Theme
   if ($("settingMapTheme")) {
     $("settingMapTheme").addEventListener("change", (e) => {
       userSettings.mapTheme = e.target.value;
-      setMapTheme(userSettings.mapTheme);
+      if (!userSettings.offlineMode || e.target.value === "offline") {
+        setMapTheme(userSettings.mapTheme);
+      }
       saveSettings();
     });
   }
@@ -1205,6 +1398,7 @@ function initSettingsUI() {
       if ($("radiusInput")) $("radiusInput").value = userSettings.defaultRadius;
       if ($("roamSpeedInput")) $("roamSpeedInput").value = userSettings.defaultRoamSpeed;
       if ($("tripFactorInput")) $("tripFactorInput").value = userSettings.defaultTripFactor;
+      if ($("settingOfflineMode")) $("settingOfflineMode").checked = false;
       syncSettingsInputs();
       redrawOverlays();
       updateTripEta();

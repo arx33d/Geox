@@ -154,5 +154,46 @@ class TestGpxGeneration(unittest.TestCase):
                 gpx_file.unlink()
 
 
+class TestOfflineCapabilities(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        server_module.app.config["TESTING"] = True
+        cls.client = server_module.app.test_client()
+
+    def test_offline_places_search(self):
+        from geox.offline import search_offline_places
+        results = search_offline_places("tokyo")
+        self.assertTrue(len(results) > 0)
+        self.assertIn("Tokyo", results[0]["label"])
+
+        vanc = search_offline_places("Vancouver")
+        self.assertTrue(len(vanc) > 0)
+        self.assertAlmostEqual(vanc[0]["lat"], 49.2827, places=2)
+
+    def test_offline_direct_routing(self):
+        from geox.router import _offline_plan_route
+        route = _offline_plan_route((40.7128, -74.0060), (40.7829, -73.9654), "car")
+        self.assertTrue(route.get("offline"))
+        self.assertTrue(len(route["waypoints"]) >= 5)
+        self.assertEqual(len(route["seg_seconds"]), len(route["waypoints"]) - 1)
+        self.assertTrue(route["distance_km"] > 0)
+        self.assertTrue(route["duration_min"] > 0)
+
+    def test_offline_status_api(self):
+        res = self.client.get("/api/offline/status")
+        self.assertEqual(res.status_code, 200)
+        data = res.get_json()
+        self.assertIn("downloading", data)
+        self.assertIn("tile_count", data)
+        self.assertIn("size_formatted", data)
+        self.assertEqual(data.get("max_limit_gb"), 25)
+
+    def test_offline_clear_api(self):
+        res = self.client.post("/api/offline/clear")
+        self.assertEqual(res.status_code, 200)
+        data = res.get_json()
+        self.assertTrue(data.get("ok"))
+
+
 if __name__ == "__main__":
     unittest.main()

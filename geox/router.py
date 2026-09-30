@@ -26,17 +26,26 @@ TRANSIT_AVG_KMH = 22.0  # urban bus/metro door-to-door average
 
 
 def geocode_name(name):
-    r = requests.get(
-        "https://nominatim.openstreetmap.org/search",
-        params={"format": "jsonv2", "q": name, "limit": 1},
-        headers=HEADERS,
-        timeout=12,
-    )
-    r.raise_for_status()
-    data = r.json()
-    if not data:
-        raise ValueError(f"Could not find “{name}” — try a clearer place name.")
-    return float(data[0]["lat"]), float(data[0]["lon"]), data[0].get("display_name", name)
+    try:
+        r = requests.get(
+            "https://nominatim.openstreetmap.org/search",
+            params={"format": "jsonv2", "q": name, "limit": 1},
+            headers=HEADERS,
+            timeout=8,
+        )
+        r.raise_for_status()
+        data = r.json()
+        if data:
+            return float(data[0]["lat"]), float(data[0]["lon"]), data[0].get("display_name", name)
+    except Exception:
+        pass
+
+    from .offline import search_offline_places
+    matches = search_offline_places(name, limit=1)
+    if matches:
+        return float(matches[0]["lat"]), float(matches[0]["lng"]), matches[0]["label"]
+
+    raise ValueError(f"Could not find “{name}” — try a clearer place name or search offline places.")
 
 
 PRESETS = {
@@ -283,36 +292,43 @@ def _process_osrm_route(route, profile, route_id=0):
     }
 
 
-def plan_route(from_ll, to_ll, profile):
-    """Fetch a real itinerary with per-segment travel times.
+def _offline_plan_route(from_ll, to_ll, profile):
+    from .motion import haversine_m
 
-    Supports alternative routes (up to 3 candidate itineraries).
-    Returns downsampled waypoints plus ``seg_seconds`` for each route,
-    so the spoofed location speeds up on highways and slows down in city streets
-    instead of moving at one flat average.
-    """
-    url = (
-        f"{OSRM[profile]}/{from_ll[1]:.6f},{from_ll[0]:.6f};"
-        f"{to_ll[1]:.6f},{to_ll[0]:.6f}"
-    )
-    r = requests.get(url, params={
-        "geometries": "geojson", "overview": "full", "annotations": "true",
-        "alternatives": "3", "steps": "true",
-    }, timeout=30)
-    r.raise_for_status()
-    data = r.json()
-    if data.get("code") != "Ok" or not data.get("routes"):
-        raise ValueError(f"Router could not find a {profile} itinerary ({data.get('code')}).")
+    dist_m = haversine_m(from_ll[0], from_ll[1], to_ll[0], to_ll[1])
+    speeds = {
+        "car": 65.0,
+        "transit": 25.0,
+        "bike": 18.0,
+        "walk": 4.5,
+    }
+    speed_kmh = speeds.get(profile, 50.0)
+    real_duration_s = max(5.0, (dist_m / 1000.0) / (speed_kmh / 3600.0))
 
-    parsed_routes = []
-    for idx, raw_route in enumerate(data["routes"]):
-        parsed_routes.append(_process_osrm_route(raw_route, profile, idx))
+    # Generate smooth waypoints along the direct vector
+    n_points = max(5, min(80, int(dist_m / 350)))
+    waypoints = []
+    for i in range(n_points):
+        frac = i / (n_points - 1)
+        lat = from_ll[0] + (to_ll[0] - from_ll[0]) * frac
+        lng = from_ll[1] + (to_ll[1] - from_ll[1]) * frac
+        waypoints.append([round(lat, 6), round(lng, 6)])
 
-    min_dur = min(r["duration_min"] for r in parsed_routes)
-    for r in parsed_routes:
-        r["is_fastest"] = (r["duration_min"] == min_dur)
+    seg_dur = round(real_duration_s / (n_points - 1), 3)
+    seg_seconds = [seg_dur] * (n_points - 1)
 
-    primary = parsed_routes[0]
+    primary = {
+        "id": 0,
+        "summary": f"Offline direct route ({profile})",
+        "waypoints": waypoints,
+        "seg_seconds": seg_seconds,
+        "distance_km": round(dist_m / 1000.0, 2),
+        "duration_min": max(1, round(real_duration_s / 60.0)),
+        "speed_kmh": round(speed_kmh, 1),
+        "profile": profile,
+        "is_fastest": True,
+        "offline": True,
+    }
     return {
         "waypoints": primary["waypoints"],
         "seg_seconds": primary["seg_seconds"],
@@ -321,5 +337,50 @@ def plan_route(from_ll, to_ll, profile):
         "speed_kmh": primary["speed_kmh"],
         "profile": profile,
         "summary": primary["summary"],
-        "routes": parsed_routes,
+        "routes": [primary],
+        "offline": True,
     }
+
+
+def plan_route(from_ll, to_ll, profile):
+    """Fetch a real itinerary with per-segment travel times.
+
+    Supports alternative routes (up to 3 candidate itineraries).
+    Falls back to offline direct route generation if network or OSRM is unreachable.
+    """
+    try:
+        url = (
+            f"{OSRM[profile]}/{from_ll[1]:.6f},{from_ll[0]:.6f};"
+            f"{to_ll[1]:.6f},{to_ll[0]:.6f}"
+        )
+        r = requests.get(url, params={
+            "geometries": "geojson", "overview": "full", "annotations": "true",
+            "alternatives": "3", "steps": "true",
+        }, timeout=15)
+        r.raise_for_status()
+        data = r.json()
+        if data.get("code") != "Ok" or not data.get("routes"):
+            raise ValueError(f"Router could not find a {profile} itinerary ({data.get('code')}).")
+
+        parsed_routes = []
+        for idx, raw_route in enumerate(data["routes"]):
+            parsed_routes.append(_process_osrm_route(raw_route, profile, idx))
+
+        min_dur = min(r["duration_min"] for r in parsed_routes)
+        for r in parsed_routes:
+            r["is_fastest"] = (r["duration_min"] == min_dur)
+
+        primary = parsed_routes[0]
+        return {
+            "waypoints": primary["waypoints"],
+            "seg_seconds": primary["seg_seconds"],
+            "distance_km": primary["distance_km"],
+            "duration_min": primary["duration_min"],
+            "speed_kmh": primary["speed_kmh"],
+            "profile": profile,
+            "summary": primary["summary"],
+            "routes": parsed_routes,
+            "offline": False,
+        }
+    except Exception:
+        return _offline_plan_route(from_ll, to_ll, profile)

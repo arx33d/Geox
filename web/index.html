@@ -5,7 +5,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Geox</title>
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <link rel="stylesheet" href="vendor/leaflet/leaflet.css">
   <link rel="stylesheet" href="style.css">
 </head>
 
@@ -152,9 +152,12 @@
         <!-- Trip Options -->
         <div id="tripOpts" class="optrow hidden">
           <label class="optlabel">DESTINATION</label>
-          <div class="search-box" style="margin-top:4px;">
-            <input id="tripDestInput" type="text" placeholder="Enter destination city, street, place…">
-            <button id="tripPlanBtn" class="btn-inside">Plan</button>
+          <div class="search-container" style="margin-top:4px;">
+            <div class="search-box">
+              <input id="tripDestInput" type="text" placeholder="Enter destination city, street, place…">
+              <button id="tripPlanBtn" class="btn-inside">Plan</button>
+            </div>
+            <div id="tripSearchResults" class="results hidden"></div>
           </div>
 
           <div class="segmented-control mini" id="tripProfiles" style="margin-top:10px;">
@@ -263,6 +266,7 @@
         <button class="settings-tab-btn on" data-target="tabMap">Map & View</button>
         <button class="settings-tab-btn" data-target="tabUnits">Units & HUD</button>
         <button class="settings-tab-btn" data-target="tabDefaults">Movement</button>
+        <button class="settings-tab-btn" data-target="tabOffline">Offline</button>
       </div>
 
       <div class="modal-body">
@@ -279,6 +283,7 @@
               <option value="esri-streets">Streets & Navigation</option>
               <option value="esri-topo">Topographic Map</option>
               <option value="esri-light">Light Canvas</option>
+              <option value="offline">Offline Map (Local Cache)</option>
             </select>
           </div>
 
@@ -369,6 +374,71 @@
             </div>
           </div>
         </div>
+
+        <!-- Tab 4: Offline -->
+        <div id="tabOffline" class="tab-content hidden">
+          <div class="setting-item">
+            <div class="setting-info">
+              <label class="setting-label">Offline Map Mode</label>
+              <div class="setting-desc">Render map using cached local tiles from offline/ folder.</div>
+            </div>
+            <label class="toggle-switch">
+              <input type="checkbox" id="settingOfflineMode">
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+
+          <div class="setting-item">
+            <div class="setting-info">
+              <label class="setting-label">Map Style & Quality</label>
+              <div class="setting-desc">Vector-like lightweight maps (not heavy satellite).</div>
+            </div>
+            <select id="offlineMapStyle" class="btn-select" style="max-width: 220px;">
+              <option value="topo" selected>Topographic Map (Lightweight)</option>
+              <option value="streets">Streets & Roads</option>
+              <option value="dark">Dark Canvas</option>
+            </select>
+          </div>
+
+          <div class="setting-item">
+            <div class="setting-info">
+              <label class="setting-label">Offline Region & Size</label>
+              <div class="setting-desc">Coverage area to download and store locally.</div>
+            </div>
+            <select id="offlinePackType" class="btn-select" style="max-width: 220px;">
+              <option value="global_base" selected>World Base Pack (~60 MB · Zoom 0-6)</option>
+              <option value="global_extended">World Extended Pack (~250 MB · Zoom 0-7)</option>
+              <option value="bounds">Current Map Viewport (Zoom 0-11)</option>
+            </select>
+          </div>
+
+          <div class="offline-storage-box">
+            <div class="offline-storage-header">
+              <span class="offline-storage-title">OFFLINE REPO STORAGE</span>
+              <span id="offlineStorageBadge" class="offline-storage-badge">0 MB / 25 GB limit</span>
+            </div>
+            <div class="offline-storage-details">
+              <span id="offlineTileCountText">Cached tiles: 0</span>
+              <span class="muted small">Saved in /offline/tiles/</span>
+            </div>
+          </div>
+
+          <div id="offlineProgressCard" class="offline-progress-card hidden">
+            <div class="offline-progress-meta">
+              <span id="offlineProgressMsg">Downloading map pack…</span>
+              <span id="offlineProgressPct" class="offline-progress-pct">0%</span>
+            </div>
+            <div class="offline-progress-bar">
+              <div id="offlineProgressFill" class="offline-progress-fill" style="width: 0%;"></div>
+            </div>
+          </div>
+
+          <div class="row btn-row" style="margin-top: 4px;">
+            <button id="startOfflineDownloadBtn" class="btn primary small" style="flex: 2;">Download Offline Map</button>
+            <button id="cancelOfflineDownloadBtn" class="btn small ghost danger hidden" style="flex: 1;">Cancel</button>
+            <button id="clearOfflineCacheBtn" class="btn small ghost" style="flex: 1;">Clear Cache</button>
+          </div>
+        </div>
       </div>
 
       <div class="modal-footer">
@@ -380,7 +450,7 @@
 
   <div id="toast"></div>
 
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="vendor/leaflet/leaflet.js"></script>
   <script src="app.js"></script>
 </body>
 

@@ -21,3 +21,6 @@ android-bridge/local.properties
 # OS / editor noise
 Thumbs.db
 .DS_Store
+
+# Offline map tile downloads (keep offline/places.json tracked)
+offline/tiles/

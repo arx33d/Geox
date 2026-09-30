@@ -881,3 +881,78 @@ label.optlabel {
   border-bottom-left-radius: 16px;
   border-bottom-right-radius: 16px;
 }
+
+/* ------------------------------------------------------------- offline UI */
+.offline-storage-box {
+  background: #111116;
+  border: 1px solid #22222a;
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.offline-storage-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.offline-storage-title {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.8px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+.offline-storage-badge {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: var(--green-soft);
+  border: 1px solid var(--green-line);
+  color: var(--green);
+  letter-spacing: 0.2px;
+}
+.offline-storage-details {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
+.offline-progress-card {
+  background: #111116;
+  border: 1px solid #22222a;
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.offline-progress-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12px;
+  color: var(--text);
+}
+.offline-progress-pct {
+  font-weight: 700;
+  color: var(--green);
+  font-size: 12px;
+}
+.offline-progress-bar {
+  width: 100%;
+  height: 6px;
+  background: #27272a;
+  border-radius: 999px;
+  overflow: hidden;
+}
+.offline-progress-fill {
+  height: 100%;
+  background: var(--green);
+  border-radius: 999px;
+  transition: width 0.3s ease;
+}
+

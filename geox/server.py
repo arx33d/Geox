@@ -8,11 +8,20 @@ import threading
 import time
 import webbrowser
 
+import os
 import requests
-from flask import Flask, jsonify, request, send_from_directory
+from flask import Flask, jsonify, request, send_file, send_from_directory
 
 from .android_backend import AndroidError, install_adb, setup_bridge
 from .engine import get_engine
+from .offline import (
+    MAP_SOURCES,
+    USER_AGENT,
+    clear_cache,
+    get_downloader,
+    get_tile_path,
+    search_offline_places,
+)
 
 app = Flask(__name__, static_folder="../web", static_url_path="")
 engine = get_engine()
@@ -90,23 +99,29 @@ def api_geocode():
     now = time.time()
     if norm_q in _GEOCODE_CACHE and now - _GEOCODE_CACHE[norm_q][0] < 3600:
         return jsonify(results=_GEOCODE_CACHE[norm_q][1])
+
+    results = []
     try:
         r = requests.get(
             f"{NOMINATIM}/search",
             params={"format": "jsonv2", "q": q, "limit": 6, "addressdetails": 0},
             headers=HEADERS,
-            timeout=12,
+            timeout=8,
         )
         r.raise_for_status()
         results = [
             {"label": item.get("display_name", ""), "lat": float(item["lat"]), "lng": float(item["lon"])}
             for item in r.json()
         ]
-        _GEOCODE_CACHE[norm_q] = (now, results)
-        if len(_GEOCODE_CACHE) > 200:
-            _GEOCODE_CACHE.pop(next(iter(_GEOCODE_CACHE)))
-    except Exception as e:  # noqa: BLE001
-        return jsonify(results=[], error=f"Search failed: {e}"), 502
+    except Exception:
+        pass
+
+    if not results:
+        results = search_offline_places(q, limit=6)
+
+    _GEOCODE_CACHE[norm_q] = (now, results)
+    if len(_GEOCODE_CACHE) > 200:
+        _GEOCODE_CACHE.pop(next(iter(_GEOCODE_CACHE)))
     return jsonify(results=results)
 
 
@@ -203,6 +218,61 @@ def api_setup_bridge():
     except Exception as e:  # noqa: BLE001
         return jsonify(error=f"Bridge setup failed: {e}"), 500
     return jsonify(bridge=state)
+
+
+@app.get("/api/offline/tiles/<int:z>/<int:x>/<int:y>.jpg")
+@app.get("/api/offline/tiles/<int:z>/<int:x>/<int:y>")
+def api_offline_tile(z, x, y):
+    tile_file = get_tile_path(z, x, y)
+    if os.path.exists(tile_file) and os.path.getsize(tile_file) > 100:
+        return send_file(tile_file, mimetype="image/jpeg")
+
+    style = request.args.get("style", "topo")
+    source_url = MAP_SOURCES.get(style, MAP_SOURCES["topo"]).format(z=z, x=x, y=y)
+    try:
+        r = requests.get(source_url, headers={"User-Agent": USER_AGENT}, timeout=4)
+        if r.status_code == 200 and len(r.content) > 100:
+            os.makedirs(os.path.dirname(tile_file), exist_ok=True)
+            with open(tile_file, "wb") as f:
+                f.write(r.content)
+            return send_file(tile_file, mimetype="image/jpeg")
+    except Exception:
+        pass
+
+    return ("", 404)
+
+
+@app.get("/api/offline/status")
+def api_offline_status():
+    return jsonify(get_downloader().status())
+
+
+@app.post("/api/offline/download")
+def api_offline_download():
+    data = request.get_json(force=True, silent=True) or {}
+    package = data.get("package", "global_base")
+    style = data.get("style", "topo")
+    bounds = data.get("bounds")
+    max_zoom = int(data.get("max_zoom", 6))
+    res = get_downloader().start_download(
+        package=package,
+        style=style,
+        bounds=bounds,
+        max_zoom=max_zoom,
+    )
+    if "error" in res:
+        return jsonify(res), 400
+    return jsonify(res)
+
+
+@app.post("/api/offline/cancel")
+def api_offline_cancel():
+    return jsonify(get_downloader().cancel())
+
+
+@app.post("/api/offline/clear")
+def api_offline_clear():
+    return jsonify(clear_cache())
 
 
 def main():
