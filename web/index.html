@@ -253,9 +253,10 @@
             <label class="setting-label">Map Style</label>
             <div class="setting-desc">Base tile layer used across map views.</div>
           </div>
-          <select id="settingMapTheme" class="btn-select" style="max-width: 200px;">
+          <select id="settingMapTheme" class="btn-select" style="max-width: 220px;">
             <option value="esri-dark">Esri Dark Canvas</option>
             <option value="carto-dark">Carto Dark Matter</option>
+            <option value="esri-streets">Streets & Navigation</option>
             <option value="osm-standard">OpenStreetMap</option>
             <option value="esri-satellite">Satellite Imagery</option>
           </select>
@@ -280,7 +281,7 @@
             <label class="setting-label">Speed & Distance Units</label>
             <div class="setting-desc">Units formatted in telemetry HUD and summaries.</div>
           </div>
-          <div class="segmented-control mini" id="settingUnitsControl" style="max-width: 170px;">
+          <div class="segmented-control mini" id="settingUnitsControl" style="width: 200px;">
             <button class="seg-btn on" data-val="metric">Metric (km)</button>
             <button class="seg-btn" data-val="imperial">Imperial (mi)</button>
           </div>
@@ -302,7 +303,7 @@
             <label class="setting-label">Polling Refresh Interval</label>
             <div class="setting-desc">Device telemetry polling frequency while spoofing.</div>
           </div>
-          <div class="segmented-control mini" id="settingPollInterval" style="max-width: 210px;">
+          <div class="segmented-control mini" id="settingPollInterval" style="width: 220px;">
             <button class="seg-btn on" data-val="1000">1s High</button>
             <button class="seg-btn" data-val="2500">2.5s Normal</button>
             <button class="seg-btn" data-val="5000">5s Eco</button>

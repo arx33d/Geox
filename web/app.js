@@ -51,19 +51,23 @@ const map = L.map("map", { zoomControl: true }).setView([state.target.lat, state
 const MAP_THEMES = {
   "esri-dark": {
     url: "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}",
-    options: { attribution: "Tiles &copy; Esri &mdash; Esri, DeLorme, NAVTEQ", maxZoom: 16 },
+    options: { attribution: "Tiles &copy; Esri &mdash; Esri, DeLorme, NAVTEQ", maxNativeZoom: 16, maxZoom: 19 },
   },
   "carto-dark": {
-    url: "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
+    url: "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png",
     options: { attribution: "&copy; OpenStreetMap contributors &copy; CARTO", subdomains: "abcd", maxZoom: 19 },
   },
+  "esri-streets": {
+    url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}",
+    options: { attribution: "Tiles &copy; Esri", maxNativeZoom: 18, maxZoom: 19 },
+  },
   "osm-standard": {
-    url: "https://{s}.tile.openstreetmap.org/{z}/{y}/{x}.png",
+    url: "https://tile.openstreetmap.org/{z}/{y}/{x}.png",
     options: { attribution: "&copy; OpenStreetMap contributors", maxZoom: 19 },
   },
   "esri-satellite": {
     url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-    options: { attribution: "Tiles &copy; Esri", maxZoom: 18 },
+    options: { attribution: "Tiles &copy; Esri", maxNativeZoom: 18, maxZoom: 19 },
   },
 };
 
