@@ -59,7 +59,7 @@ class Engine:
             return
         try:
             p = subprocess.run(
-                ["taskkill", "/F", "/IM", "pymobiledevice3.exe"],
+                ["taskkill", "/F", "/T", "/IM", "pymobiledevice3.exe"],
                 capture_output=True, text=True, encoding="utf-8", errors="replace",
                 creationflags=0x08000000,
             )

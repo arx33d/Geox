@@ -498,6 +498,23 @@ class IosCliSession:
         self.thread = threading.Thread(target=self._run, daemon=True)
         self._current_gpx_path = None
 
+    def _kill_tree(self, proc):
+        """Kill a CLI process and its python worker children.
+
+        The pip console-script shim spawns a python child that does the real
+        work; killing only the shim leaves that child asserting forever.
+        """
+        if proc is None or proc.poll() is not None:
+            return
+        if os.name == "nt":
+            subprocess.run(
+                ["taskkill", "/F", "/T", "/PID", str(proc.pid)],
+                capture_output=True, text=True, encoding="utf-8", errors="replace",
+                creationflags=CREATE_NO_WINDOW,
+            )
+        else:
+            proc.kill()
+
     def _track_proc(self, proc):
         self._procs = [p for p in self._procs if p.poll() is None]
         self._procs.append(proc)
@@ -506,10 +523,7 @@ class IosCliSession:
     def _kill_others(self, keep):
         for p in self._procs:
             if p is not keep and p.poll() is None:
-                try:
-                    p.kill()
-                except Exception:
-                    pass
+                self._kill_tree(p)
         self._procs = [p for p in self._procs if p.poll() is None]
 
     def start(self):
@@ -551,10 +565,7 @@ class IosCliSession:
 
             if not confirmed:
                 # the replacement failed: keep the running spoof untouched
-                try:
-                    new_proc.kill()
-                except Exception:
-                    pass
+                self._kill_tree(new_proc)
                 self._procs = [p for p in self._procs if p is not new_proc]
                 output = _strip_ansi("\n".join(buf))
                 msg = _cli_failure_message(output) or (
@@ -583,10 +594,7 @@ class IosCliSession:
         # retire every process this session ever spawned (AutoSwap overlap,
         # reconnects), so none of them keeps asserting an old location
         for p in list(getattr(self, "_procs", [])):
-            try:
-                p.kill()
-            except Exception:
-                pass
+            self._kill_tree(p)
 
     def snapshot(self):
         return {
@@ -716,7 +724,7 @@ class IosCliSession:
             self.engine.log(f"[iOS17] unexpected failure: {e}", "error")
         finally:
             if self.proc and self.proc.poll() is None:
-                self.proc.kill()
+                self._kill_tree(self.proc)
 
     def _prepare_developer_image(self):
         self.engine.log("[iOS17] establishing tunnel & preparing developer image…")

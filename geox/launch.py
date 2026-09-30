@@ -109,17 +109,40 @@ def main():
     except KeyboardInterrupt:
         return 0
 
+    if choice == 1:
+        return _cli_shell()
     if choice == 0:
         from .server import main as server_main
 
         sys.argv = [sys.argv[0]] + [a for a in args if a.startswith("--")]
         server_main()
         return 0
+    return 0
+
+
+def _cli_shell():
+    """Interactive terminal mode: type Geox commands until 'exit'."""
+    import shlex
 
     from .cli import main as cli_main
 
-    print(f"{GREY}tip: python -m geox --location \"Paris\" --movement roam 25 4.5{RESET}")
-    return cli_main(args or ["--help"]) or 0
+    print(f"{GREY}type a Geox command (try: --preset mcmurdo --movement roam 200 5)")
+    print(f"'help' shows all options, 'exit' quits{RESET}\n")
+    while True:
+        try:
+            line = input(f"{GREEN}geox>{RESET} ").strip()
+        except (EOFError, KeyboardInterrupt):
+            print()
+            return 0
+        if not line:
+            continue
+        if line in ("exit", "quit"):
+            return 0
+        args = ["--help"] if line == "help" else shlex.split(line)
+        try:
+            cli_main(args)
+        except SystemExit:
+            pass
 
 
 if __name__ == "__main__":
