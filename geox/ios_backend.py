@@ -222,24 +222,46 @@ def _strip_ansi(text):
 
 
 def _cli_failure_message(text):
-    """Map pymobiledevice3 CLI output to a user-actionable message."""
-    low = _strip_ansi(text).lower()
-    if "enable-developer-mode" in low or "developer mode" in low:
-        return (
-            "Developer Mode is OFF on the iPhone. Use the 'Enable Developer "
-            "Mode' button (the phone reboots once), then press START again."
-        )
-    if "nodeviceconnected" in low or "no device" in low:
+    """Map pymobiledevice3 CLI output to a user-actionable message.
+
+    Only the FINAL exception line of the output is classified: tracebacks
+    printed by the CLI mention words like 'PasswordProtected' inside their
+    own error-mapping tables, and matching the whole dump produces false
+    errors (e.g. claiming a backup-password problem that does not exist).
+    """
+    clean = _strip_ansi(text)
+    final = None
+    for line in reversed(clean.splitlines()):
+        line = line.strip()
+        m = re.match(r"^([\w.]+(?:Error|Exception))\b[:\s]*(.*)$", line)
+        if m:
+            final = (m.group(1) + " " + m.group(2)).strip().lower()
+            break
+    if final is None:
+        # no exception line: scan only the last non-empty line, softly
+        non_empty = [l.strip() for l in clean.splitlines() if l.strip()]
+        final = non_empty[-1].lower() if non_empty else ""
+    low = final
+    if "devicenotconnected" in low or "device is not connected" in low or "no device" in low:
         return (
             "The iPhone disappeared from USB. Keep it plugged in and unlocked, "
             "then press START again."
         )
-    if "trust" in low or "pairing" in low:
+    if "invalidservice" in low:
+        return "The phone dropped the developer session (another session may have taken it)."
+    if "developermode" in low or "enable-developer-mode" in low:
+        return (
+            "Developer Mode is OFF on the iPhone. Use the 'Enable Developer "
+            "Mode' button (the phone reboots once), then press START again."
+        )
+    if "passwordprotected" in low or "passcode" in low:
+        return "The iPhone is passcode-locked: unlock it, then try again."
+    if "passwordrequired" in low:
+        return "Your iOS backup password is needed to finish the pairing."
+    if "trust" in low or "pairingdialog" in low:
         return ("The iPhone is waiting for you to trust this computer: unlock "
                 "it, tap 'Trust' and enter the passcode, then try again.")
-    if "password" in low:
-        return "Your iOS backup password is needed to finish the pairing."
-    if "usbmux" in low or "connection" in low and "refused" in low:
+    if "usbmux" in low or "connectionfailed" in low:
         return ("Cannot reach the Apple USB service. Open the Apple Devices "
                 "app (or iTunes) once, replug the cable and retry.")
     return None
@@ -472,6 +494,7 @@ class IosCliSession:
         self._out = []
         self._procs = []  # every CLI process launched by this session
         self._swap_lock = threading.Lock()
+        self.superseded = False  # an AutoSwap replacement took over; don't reconnect
         self.thread = threading.Thread(target=self._run, daemon=True)
         self._current_gpx_path = None
 
@@ -621,7 +644,7 @@ class IosCliSession:
             lat, lng = motion.step(1.0)
             append(
                 f'<trkpt lat="{lat:.7f}" lon="{lng:.7f}">'
-                f"<time>{fmt('%Y-%m-%dT%H:%M:%SZ', gmtime(base + i))}</time>\n"
+                f"<time>{fmt('%Y-%m-%dT%H:%M:%SZ', gmtime(base + i))}</time></trkpt>\n"
             )
         with open(path, "w", encoding="utf-8", newline="\n") as f:
             f.write(
@@ -706,11 +729,15 @@ class IosCliSession:
         producing a fresh fix can't win for long — this is what stops the
         flicker back to the real location.  If the tunnel blips, the session
         reconnects on its own instead of failing.
+
+        Reconnects and AutoSwaps share `self._swap_lock`, so exactly one CLI
+        process can ever be (re)launched at a time and a track file is never
+        rewritten while a process is reading it.
         """
         self.motion = None
         if not self._current_gpx_path:
-            self._current_gpx_path = self._gpx_path(f"track-{int(time.time())}.gpx")
-        self._write_gpx(self._current_gpx_path)
+            self._current_gpx_path = self._gpx_path(f"track-{int(time.time() * 1000)}.gpx")
+            self._write_gpx(self._current_gpx_path)
         self.state = "active"
         on_msg = (
             f"[iOS17] spoofing ON → {self.cfg.get('place') or ''}"
@@ -719,26 +746,50 @@ class IosCliSession:
         self.engine.log(on_msg, "good")
         consecutive = 0
         while not self.stop_event.is_set():
-            self._out = []
-            started = time.time()
-            self.proc = self._launch(gpx=self._current_gpx_path)
-            pump = threading.Thread(target=self._pump, args=(self.proc,), daemon=True)
-            pump.start()
-            while not self.stop_event.is_set() and self.proc.poll() is None:
+            # follow whichever process is currently asserting
+            proc = self.proc
+            if proc is not None and proc.poll() is None:
                 time.sleep(0.5)
-            if self.stop_event.is_set():
+                continue
+            if self.superseded:
                 break
+            launched = None
+            with self._swap_lock:
+                if self.stop_event.is_set():
+                    break
+                if self.proc is not None and self.proc.poll() is None:
+                    continue  # an AutoSwap launched one while we waited on the lock
+                try:
+                    self._write_gpx(self._current_gpx_path)
+                except Exception as e:
+                    self.engine.log(f"[iOS17] could not regenerate track: {e}", "error")
+                buf = []
+                started = time.time()
+                launched = self._launch(gpx=self._current_gpx_path)
+                pump = threading.Thread(target=self._pump, args=(launched, buf), daemon=True)
+                pump.start()
+                self.proc = launched
+                self._out = buf
+                self.state = "active"
+            # follow our process; stop following if an AutoSwap replaces it
+            while not self.stop_event.is_set() and self.proc is launched \
+                    and launched.poll() is None:
+                time.sleep(0.5)
+            if self.stop_event.is_set() or self.superseded:
+                break
+            if self.proc is not launched:
+                continue  # an AutoSwap took over; follow the new process instead
             uptime = time.time() - started
             output = "\n".join(self._out)
             if uptime >= 300:
                 consecutive = 0
             consecutive += 1
-            msg = _cli_failure_message(output) or "tunnel blip — reconnecting"
+            msg = _cli_failure_message(output) or "tunnel blip"
             if consecutive >= 8:
                 self._fail_from_output(output)
                 self.engine.log(f"[iOS17] giving up after {consecutive} reconnect attempts.", "error")
                 return
-            self.engine.log(f"[iOS17] {msg} — reconnecting (#{consecutive})…", "warn")
+            self.engine.log(f"[iOS17] {msg} (#{consecutive}) — reconnecting…", "warn")
             if "disappeared from USB" in msg or "not connected" in msg.lower():
                 # the phone physically left USB — wait for it instead of dying
                 self.engine.log("[iOS17] waiting for the iPhone to come back on USB…", "warn")
@@ -753,10 +804,6 @@ class IosCliSession:
                     self.engine.log(f"[iOS17] {self.error}", "error")
                     return
             time.sleep(min(3.0, 0.5 * consecutive))
-            try:
-                self._write_gpx(self._current_gpx_path)
-            except Exception as e:
-                self.engine.log(f"[iOS17] could not regenerate track: {e}", "error")
         self.state = "stopped"
         self.engine.log("[iOS17] spoofing OFF — real GPS restored")
 
