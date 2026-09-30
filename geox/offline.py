@@ -28,7 +28,7 @@ MAP_SOURCES = {
     "dark": "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}",
 }
 
-USER_AGENT = "Geox/1.3.0 (Offline Map Downloader)"
+USER_AGENT = "Geox/1.4.0 (Offline Map Downloader)"
 
 COUNTRIES_BBOX: dict[str, list[float]] = {
     "United States": [24.3963, -125.0, 49.3844, -66.9346],
