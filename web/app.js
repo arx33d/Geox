@@ -1148,6 +1148,11 @@ function initSettingsUI() {
   function openSettings() {
     syncSettingsInputs();
     modal.classList.remove("hidden");
+    const activeTab = document.querySelector("#settingsTabButtons .settings-tab-btn.on");
+    if (activeTab && activeTab.dataset.target === "tabOffline") {
+      refreshOfflineStats();
+      updateDownloadEstimate();
+    }
   }
 
   function closeSettings() {
@@ -1180,9 +1185,122 @@ function initSettingsUI() {
       });
       if (targetId === "tabOffline") {
         refreshOfflineStats();
+        updateDownloadEstimate();
       }
     });
   });
+
+  // Offline country/region state
+  let selectedCountry = { name: "United States", bounds: [24.3963, -125.0, 49.3844, -66.9346] };
+  let countrySearchDebounce = null;
+
+  async function updateDownloadEstimate() {
+    const weightEl = $("offlineWeight");
+    const regionEl = $("offlineRegion");
+    if (!weightEl || !regionEl) return;
+
+    const weight = weightEl.value || "moderate";
+    const region = regionEl.value || "world";
+
+    const countryWrap = $("countrySearchContainer");
+    if (countryWrap) {
+      countryWrap.classList.toggle("hidden", region !== "country");
+    }
+
+    let bounds = null;
+    if (region === "viewport") {
+      const b = map.getBounds();
+      bounds = [b.getSouth(), b.getWest(), b.getNorth(), b.getEast()];
+    } else if (region === "country" && selectedCountry) {
+      bounds = selectedCountry.bounds;
+    }
+
+    try {
+      const res = await api("/api/offline/estimate", {
+        region_type: region,
+        weight: weight,
+        country: (region === "country" && selectedCountry) ? selectedCountry.name : null,
+        bounds: bounds,
+      });
+
+      if ($("estSizeVal")) $("estSizeVal").textContent = `~${res.size_formatted}`;
+      if ($("estTilesVal")) $("estTilesVal").textContent = res.tile_count_formatted;
+      if ($("estDiskVal")) $("estDiskVal").textContent = `${res.disk_free_formatted} free`;
+      if ($("estDescVal")) $("estDescVal").textContent = res.description;
+
+      const badge = $("offlineEstimateBadge");
+      if (badge) {
+        if (res.has_space) {
+          badge.textContent = "Ready to download";
+          badge.classList.remove("warn");
+        } else {
+          badge.textContent = "Low disk space";
+          badge.classList.add("warn");
+        }
+      }
+    } catch {
+      // Non-blocking estimate failure
+    }
+  }
+
+  // Country search handling
+  if ($("countrySearchInput")) {
+    $("countrySearchInput").addEventListener("input", () => {
+      clearTimeout(countrySearchDebounce);
+      const q = $("countrySearchInput").value.trim();
+      const resEl = $("countrySearchResults");
+      if (!resEl) return;
+      if (q.length < 1) {
+        resEl.classList.add("hidden");
+        return;
+      }
+      countrySearchDebounce = setTimeout(async () => {
+        try {
+          const data = await api(`/api/offline/regions?q=${encodeURIComponent(q)}`);
+          if (!data.results || !data.results.length) {
+            resEl.innerHTML = `<div class="res muted">No countries found</div>`;
+          } else {
+            resEl.innerHTML = data.results.map((c) =>
+              `<div class="res" data-name="${c.name}">${c.name}</div>`
+            ).join("");
+            resEl.querySelectorAll(".res").forEach((el) => {
+              el.addEventListener("click", () => {
+                const name = el.dataset.name;
+                const match = data.results.find((x) => x.name === name);
+                if (match) {
+                  selectedCountry = match;
+                  if ($("selectedCountryBadge")) $("selectedCountryBadge").textContent = `Selected: ${match.name}`;
+                  $("countrySearchInput").value = match.name;
+                  resEl.classList.add("hidden");
+                  updateDownloadEstimate();
+                }
+              });
+            });
+          }
+          resEl.classList.remove("hidden");
+        } catch {
+          resEl.classList.add("hidden");
+        }
+      }, 200);
+    });
+
+    if ($("selectedCountryBadge") && selectedCountry) {
+      $("selectedCountryBadge").textContent = `Selected: ${selectedCountry.name}`;
+    }
+  }
+
+  if ($("offlineWeight")) {
+    $("offlineWeight").addEventListener("change", updateDownloadEstimate);
+  }
+  if ($("offlineRegion")) {
+    $("offlineRegion").addEventListener("change", () => {
+      if ($("offlineRegion").value === "country" && !selectedCountry) {
+        selectedCountry = { name: "United States", bounds: [24.3963, -125.0, 49.3844, -66.9346] };
+        if ($("selectedCountryBadge")) $("selectedCountryBadge").textContent = "Selected: United States";
+      }
+      updateDownloadEstimate();
+    });
+  }
 
   // Offline stats polling
   let offlinePollTimer = null;
@@ -1190,10 +1308,14 @@ function initSettingsUI() {
     try {
       const res = await api("/api/offline/status");
       if ($("offlineStorageBadge")) {
-        $("offlineStorageBadge").textContent = `${res.size_formatted} / ${res.max_limit_gb} GB limit`;
+        const freeText = res.disk_free_formatted ? ` · ${res.disk_free_formatted} available` : "";
+        $("offlineStorageBadge").textContent = `${res.size_formatted} used${freeText}`;
       }
       if ($("offlineTileCountText")) {
         $("offlineTileCountText").textContent = `Cached tiles: ${res.tile_count.toLocaleString()}`;
+      }
+      if ($("offlineDiskLeftText")) {
+        $("offlineDiskLeftText").textContent = `Disk available: ${res.disk_free_formatted || "--"}`;
       }
 
       const progCard = $("offlineProgressCard");
@@ -1249,25 +1371,25 @@ function initSettingsUI() {
   // Offline download action
   if ($("startOfflineDownloadBtn")) {
     $("startOfflineDownloadBtn").addEventListener("click", async () => {
-      const pack = $("offlinePackType") ? $("offlinePackType").value : "global_base";
+      const region = $("offlineRegion") ? $("offlineRegion").value : "world";
+      const weight = $("offlineWeight") ? $("offlineWeight").value : "moderate";
       const style = $("offlineMapStyle") ? $("offlineMapStyle").value : "topo";
-      let bounds = null;
-      let maxZoom = 6;
 
-      if (pack === "bounds") {
+      let bounds = null;
+      if (region === "viewport") {
         const b = map.getBounds();
         bounds = [b.getSouth(), b.getWest(), b.getNorth(), b.getEast()];
-        maxZoom = Math.min(11, Math.max(7, map.getZoom() + 2));
-      } else if (pack === "global_extended") {
-        maxZoom = 7;
+      } else if (region === "country" && selectedCountry) {
+        bounds = selectedCountry.bounds;
       }
 
       try {
         const res = await api("/api/offline/download", {
-          package: pack,
+          package: region,
+          weight: weight,
           style: style,
+          country: (region === "country" && selectedCountry) ? selectedCountry.name : null,
           bounds: bounds,
-          max_zoom: maxZoom,
         });
         if (res.error) {
           toast(res.error, "error");
@@ -1302,6 +1424,7 @@ function initSettingsUI() {
         await api("/api/offline/clear");
         toast("Offline map cache cleared.", "ok");
         refreshOfflineStats();
+        updateDownloadEstimate();
       } catch (err) {
         toast(`Error clearing cache: ${err.message}`, "error");
       }

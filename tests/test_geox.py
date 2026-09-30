@@ -186,7 +186,30 @@ class TestOfflineCapabilities(unittest.TestCase):
         self.assertIn("downloading", data)
         self.assertIn("tile_count", data)
         self.assertIn("size_formatted", data)
-        self.assertEqual(data.get("max_limit_gb"), 25)
+        self.assertIn("disk_free_gb", data)
+        self.assertTrue(data.get("disk_free_gb", 0) > 0)
+
+    def test_offline_estimate_api(self):
+        res = self.client.get("/api/offline/estimate?region_type=world&weight=moderate")
+        self.assertEqual(res.status_code, 200)
+        data = res.get_json()
+        self.assertEqual(data.get("tile_count"), 5461)
+        self.assertIn("size_formatted", data)
+        self.assertIn("has_space", data)
+
+        res2 = self.client.get("/api/offline/estimate?region_type=country&weight=heavy&country=France")
+        self.assertEqual(res2.status_code, 200)
+        data2 = res2.get_json()
+        self.assertTrue(data2.get("tile_count") > 0)
+        self.assertIn("size_formatted", data2)
+
+    def test_offline_regions_api(self):
+        res = self.client.get("/api/offline/regions?q=United")
+        self.assertEqual(res.status_code, 200)
+        data = res.get_json()
+        names = [x["name"] for x in data.get("results", [])]
+        self.assertIn("United States", names)
+        self.assertIn("United Kingdom", names)
 
     def test_offline_clear_api(self):
         res = self.client.post("/api/offline/clear")

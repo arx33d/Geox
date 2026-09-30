@@ -390,10 +390,10 @@
 
           <div class="setting-item">
             <div class="setting-info">
-              <label class="setting-label">Map Style & Quality</label>
+              <label class="setting-label">Map Style & Theme</label>
               <div class="setting-desc">Vector-like lightweight maps (not heavy satellite).</div>
             </div>
-            <select id="offlineMapStyle" class="btn-select" style="max-width: 220px;">
+            <select id="offlineMapStyle" class="btn-select" style="max-width: 230px;">
               <option value="topo" selected>Topographic Map (Lightweight)</option>
               <option value="streets">Streets & Roads</option>
               <option value="dark">Dark Canvas</option>
@@ -402,24 +402,77 @@
 
           <div class="setting-item">
             <div class="setting-info">
-              <label class="setting-label">Offline Region & Size</label>
-              <div class="setting-desc">Coverage area to download and store locally.</div>
+              <label class="setting-label">Detail & Weight Tier</label>
+              <div class="setting-desc">Tile depth level and density of road/terrain network.</div>
             </div>
-            <select id="offlinePackType" class="btn-select" style="max-width: 220px;">
-              <option value="global_base" selected>World Base Pack (~60 MB · Zoom 0-6)</option>
-              <option value="global_extended">World Extended Pack (~250 MB · Zoom 0-7)</option>
-              <option value="bounds">Current Map Viewport (Zoom 0-11)</option>
+            <select id="offlineWeight" class="btn-select" style="max-width: 230px;">
+              <option value="light">Lightweight (Overview & Borders)</option>
+              <option value="moderate" selected>Moderate Weight (Highways & Terrain)</option>
+              <option value="heavy">Heavy Weight (Detailed Road Network)</option>
+              <option value="full">Full Map (Maximum Detail - All Roads Available)</option>
             </select>
           </div>
 
+          <div class="setting-item">
+            <div class="setting-info">
+              <label class="setting-label">Coverage Region</label>
+              <div class="setting-desc">Geographic boundary to package and store locally.</div>
+            </div>
+            <select id="offlineRegion" class="btn-select" style="max-width: 230px;">
+              <option value="world" selected>World Map</option>
+              <option value="world_ext">Extended World Map (More Detail)</option>
+              <option value="country">Search by Country / Region</option>
+              <option value="viewport">Current Map Viewport</option>
+            </select>
+          </div>
+
+          <!-- Country / Region Search Box -->
+          <div id="countrySearchContainer" class="optrow hidden" style="margin-top: -4px;">
+            <label class="optlabel">SELECT COUNTRY OR REGION</label>
+            <div class="search-container" style="margin-top: 4px;">
+              <div class="search-box">
+                <input id="countrySearchInput" type="text" placeholder="Type country name (e.g. France, United States, Japan…)">
+                <button id="countrySearchBtn" class="btn-inside">Search</button>
+              </div>
+              <div id="countrySearchResults" class="results hidden"></div>
+            </div>
+            <div id="selectedCountryBadge" class="place-label" style="margin-top: 6px;"></div>
+          </div>
+
+          <!-- Download Size & Tile Estimate Preview Card -->
+          <div class="offline-estimate-card" id="offlineEstimateCard">
+            <div class="offline-estimate-header">
+              <span class="offline-estimate-title">DOWNLOAD ESTIMATE PREVIEW</span>
+              <span id="offlineEstimateBadge" class="offline-estimate-badge">Calculating…</span>
+            </div>
+            <div class="offline-estimate-grid">
+              <div class="offline-estimate-stat">
+                <span class="offline-stat-num" id="estSizeVal">--</span>
+                <span class="offline-stat-label">Estimated Size</span>
+              </div>
+              <div class="offline-estimate-stat">
+                <span class="offline-stat-num" id="estTilesVal">--</span>
+                <span class="offline-stat-label">Total Tiles</span>
+              </div>
+              <div class="offline-estimate-stat">
+                <span class="offline-stat-num" id="estDiskVal">--</span>
+                <span class="offline-stat-label">Disk Available</span>
+              </div>
+            </div>
+            <div class="offline-estimate-desc" id="estDescVal">
+              Moderate Weight: Regional road network, state/provincial routes, elevation contours, and towns.
+            </div>
+          </div>
+
+          <!-- Offline Storage Box (Left space on disk) -->
           <div class="offline-storage-box">
             <div class="offline-storage-header">
               <span class="offline-storage-title">OFFLINE REPO STORAGE</span>
-              <span id="offlineStorageBadge" class="offline-storage-badge">0 MB / 25 GB limit</span>
+              <span id="offlineStorageBadge" class="offline-storage-badge">0 MB used</span>
             </div>
             <div class="offline-storage-details">
               <span id="offlineTileCountText">Cached tiles: 0</span>
-              <span class="muted small">Saved in /offline/tiles/</span>
+              <span id="offlineDiskLeftText" class="muted small">Disk available: --</span>
             </div>
           </div>
 

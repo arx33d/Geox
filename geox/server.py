@@ -15,11 +15,14 @@ from flask import Flask, jsonify, request, send_file, send_from_directory
 from .android_backend import AndroidError, install_adb, setup_bridge
 from .engine import get_engine
 from .offline import (
+    COUNTRIES_BBOX,
     MAP_SOURCES,
     USER_AGENT,
+    calculate_estimate,
     clear_cache,
     get_downloader,
     get_tile_path,
+    search_countries,
     search_offline_places,
 )
 
@@ -247,18 +250,59 @@ def api_offline_status():
     return jsonify(get_downloader().status())
 
 
+@app.get("/api/offline/estimate")
+@app.post("/api/offline/estimate")
+def api_offline_estimate():
+    if request.method == "POST":
+        data = request.get_json(force=True, silent=True) or {}
+    else:
+        data = request.args.to_dict()
+    region_type = data.get("region_type", "world")
+    weight = data.get("weight", "moderate")
+    bounds = data.get("bounds")
+    if isinstance(bounds, str):
+        try:
+            bounds = [float(x.strip()) for x in bounds.split(",")]
+        except Exception:
+            bounds = None
+    country = data.get("country")
+    if country and country in COUNTRIES_BBOX:
+        bounds = COUNTRIES_BBOX[country]
+        region_type = "country"
+
+    return jsonify(calculate_estimate(region_type=region_type, weight=weight, bounds=bounds))
+
+
+@app.get("/api/offline/regions")
+def api_offline_regions():
+    q = request.args.get("q", "")
+    return jsonify(results=search_countries(q))
+
+
 @app.post("/api/offline/download")
 def api_offline_download():
     data = request.get_json(force=True, silent=True) or {}
-    package = data.get("package", "global_base")
+    package = data.get("package", "world")
     style = data.get("style", "topo")
     bounds = data.get("bounds")
-    max_zoom = int(data.get("max_zoom", 6))
+    max_zoom = data.get("max_zoom")
+    if max_zoom is not None:
+        try:
+            max_zoom = int(max_zoom)
+        except Exception:
+            max_zoom = None
+    weight = data.get("weight", "moderate")
+    country = data.get("country")
+    if country and country in COUNTRIES_BBOX:
+        bounds = COUNTRIES_BBOX[country]
+        package = "country"
+
     res = get_downloader().start_download(
         package=package,
         style=style,
         bounds=bounds,
         max_zoom=max_zoom,
+        weight=weight,
     )
     if "error" in res:
         return jsonify(res), 400

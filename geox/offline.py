@@ -1,7 +1,7 @@
 """Geox Offline Manager — local map tile caching, pack downloader, and gazetteer.
 
 Handles storage in offline/tiles/, auto-caching proxy, background downloads,
-and offline place searches.
+real-time estimate calculations based on disk space, and offline place/country searches.
 """
 
 from __future__ import annotations
@@ -30,6 +30,46 @@ MAP_SOURCES = {
 
 USER_AGENT = "Geox/1.3.0 (Offline Map Downloader)"
 
+COUNTRIES_BBOX: dict[str, list[float]] = {
+    "United States": [24.3963, -125.0, 49.3844, -66.9346],
+    "Canada": [41.6766, -141.0019, 83.1106, -52.6481],
+    "United Kingdom": [49.8238, -8.6493, 60.8605, 1.7689],
+    "France": [41.333, -5.142, 51.089, 9.56],
+    "Germany": [47.2701, 5.8663, 55.0583, 15.0418],
+    "Japan": [24.0457, 122.9345, 45.5515, 153.9866],
+    "Australia": [-43.6345, 113.3389, -10.6681, 153.5694],
+    "Italy": [36.6199, 6.6272, 47.092, 18.5204],
+    "Spain": [36.0001, -9.3015, 43.7915, 4.3278],
+    "Mexico": [14.5388, -118.404, 32.7186, -86.7104],
+    "Brazil": [-33.75, -73.98, 5.27, -34.79],
+    "India": [8.0667, 68.1167, 37.0833, 97.4],
+    "China": [18.1536, 73.4997, 53.5609, 134.7754],
+    "Switzerland": [45.818, 5.9559, 47.8084, 10.4923],
+    "Netherlands": [50.7504, 3.3316, 53.555, 7.2275],
+    "Belgium": [49.497, 2.544, 51.505, 6.408],
+    "Sweden": [55.3369, 11.0274, 69.06, 24.167],
+    "Norway": [57.9622, 4.636, 71.1855, 31.077],
+    "Poland": [49.002, 14.1229, 54.836, 24.1458],
+    "South Korea": [33.1, 125.0, 38.6, 129.6],
+    "New Zealand": [-47.2899, 166.4261, -34.4288, 178.6146],
+    "Argentina": [-55.0574, -73.577, -21.7812, -53.6375],
+    "South Africa": [-34.8333, 16.45, -22.1265, 32.8906],
+    "United Arab Emirates": [22.6333, 51.5833, 26.0667, 56.3833],
+    "Singapore": [1.1304, 103.602, 1.4504, 104.012],
+    "Hong Kong": [22.1534, 113.835, 22.562, 114.407],
+    "Ireland": [51.419, -10.663, 55.435, -5.996],
+    "Austria": [46.3723, 9.5307, 49.0206, 17.1607],
+    "Portugal": [36.961, -9.5005, 42.154, -6.189],
+    "Greece": [34.802, 19.373, 41.748, 28.246],
+    "Turkey": [35.813, 25.663, 42.107, 44.817],
+    "Egypt": [22.0, 24.7, 31.7, 36.9],
+    "Saudi Arabia": [16.38, 34.5, 32.15, 55.67],
+    "Indonesia": [-11.0, 95.0, 6.07, 141.0],
+    "Philippines": [4.58, 116.93, 21.13, 126.6],
+    "Thailand": [5.61, 97.34, 20.46, 105.64],
+    "Vietnam": [8.56, 102.14, 23.39, 109.46],
+}
+
 
 def deg2num(lat_deg: float, lon_deg: float, zoom: int) -> tuple[int, int]:
     """Convert WGS84 lat/lon to Web Mercator tile x, y."""
@@ -46,9 +86,26 @@ def get_tile_path(z: int, x: int, y: int) -> str:
 
 
 def get_storage_stats() -> dict[str, Any]:
-    """Calculate total downloaded tiles and disk space used."""
+    """Calculate total downloaded tiles and disk space used/free."""
+    target_path = OFFLINE_DIR if os.path.exists(OFFLINE_DIR) else BASE_DIR
+    try:
+        u = shutil.disk_usage(target_path)
+        disk_free_gb = round(u.free / (1024 * 1024 * 1024), 1)
+        disk_total_gb = round(u.total / (1024 * 1024 * 1024), 1)
+    except Exception:
+        disk_free_gb = 50.0
+        disk_total_gb = 250.0
+
     if not os.path.exists(TILES_DIR):
-        return {"tile_count": 0, "size_mb": 0.0, "size_formatted": "0 MB", "max_limit_gb": 25}
+        return {
+            "tile_count": 0,
+            "size_mb": 0.0,
+            "size_formatted": "0 MB",
+            "disk_free_gb": disk_free_gb,
+            "disk_free_formatted": f"{disk_free_gb} GB",
+            "disk_total_gb": disk_total_gb,
+            "max_limit_gb": disk_free_gb,
+        }
 
     total_bytes = 0
     tile_count = 0
@@ -68,7 +125,10 @@ def get_storage_stats() -> dict[str, Any]:
         "tile_count": tile_count,
         "size_mb": round(size_mb, 1),
         "size_formatted": size_fmt,
-        "max_limit_gb": 25,
+        "disk_free_gb": disk_free_gb,
+        "disk_free_formatted": f"{disk_free_gb} GB",
+        "disk_total_gb": disk_total_gb,
+        "max_limit_gb": disk_free_gb,
     }
 
 
@@ -100,9 +160,7 @@ def search_offline_places(query: str, limit: int = 6) -> list[dict[str, Any]]:
     if not q or not _PLACES_CACHE:
         return []
 
-    # Priority 1: Label starts with query
     prefix_matches = [p for p in _PLACES_CACHE if p["label"].lower().startswith(q)]
-    # Priority 2: Label contains query word boundary or substring
     substring_matches = [
         p for p in _PLACES_CACHE
         if q in p["label"].lower() and p not in prefix_matches
@@ -110,6 +168,81 @@ def search_offline_places(query: str, limit: int = 6) -> list[dict[str, Any]]:
 
     combined = prefix_matches + substring_matches
     return combined[:limit]
+
+
+def search_countries(query: str, limit: int = 8) -> list[dict[str, Any]]:
+    """Search country / region bounding box dataset."""
+    q = query.strip().lower()
+    if not q:
+        return [{"name": name, "bounds": bbox} for name, bbox in list(COUNTRIES_BBOX.items())[:limit]]
+
+    matches = []
+    for name, bbox in COUNTRIES_BBOX.items():
+        if name.lower().startswith(q) or q in name.lower():
+            matches.append({"name": name, "bounds": bbox})
+            if len(matches) >= limit:
+                break
+    return matches
+
+
+def calculate_estimate(
+    region_type: str = "world",
+    weight: str = "moderate",
+    bounds: list[float] | None = None,
+) -> dict[str, Any]:
+    """Calculate precise tile counts, MB/GB sizes, and disk sufficiency for a pack."""
+    stats = get_storage_stats()
+    free_gb = stats["disk_free_gb"]
+
+    if region_type in ("world", "global", "global_base"):
+        zoom_map = {"light": 5, "moderate": 6, "heavy": 7, "full": 8}
+        target_zoom = zoom_map.get(weight, 6)
+        tile_count = sum(4 ** z for z in range(target_zoom + 1))
+    elif region_type in ("world_ext", "global_extended"):
+        zoom_map = {"light": 6, "moderate": 7, "heavy": 8, "full": 9}
+        target_zoom = zoom_map.get(weight, 7)
+        tile_count = sum(4 ** z for z in range(target_zoom + 1))
+    elif region_type in ("country", "bounds", "region", "viewport") and bounds and len(bounds) == 4:
+        min_lat, min_lng, max_lat, max_lng = bounds
+        zoom_map = {"light": 8, "moderate": 10, "heavy": 12, "full": 14}
+        target_zoom = zoom_map.get(weight, 10)
+        min_z = max(0, target_zoom - 4)
+        tile_count = 0
+        for z in range(min_z, target_zoom + 1):
+            x1, y2 = deg2num(min_lat, min_lng, z)
+            x2, y1 = deg2num(max_lat, max_lng, z)
+            tile_count += (max(x1, x2) - min(x1, x2) + 1) * (max(y1, y2) - min(y1, y2) + 1)
+    else:
+        tile_count = 5461
+
+    # Average tile size is ~15 KB
+    est_bytes = tile_count * 15 * 1024
+    est_mb = est_bytes / (1024 * 1024)
+    if est_mb >= 1024:
+        est_fmt = f"{est_mb / 1024:.2f} GB"
+    else:
+        est_fmt = f"{round(est_mb)} MB" if est_mb >= 10 else f"{est_mb:.1f} MB"
+
+    weight_descriptions = {
+        "light": "Lightweight: Basemap overview, borders, major topography, and primary highways.",
+        "moderate": "Moderate Weight: Regional road network, state/provincial routes, elevation contours, and towns.",
+        "heavy": "Heavy Weight: High-density road network, local connectors, municipal roads, and detailed terrain.",
+        "full": "Full Map (Maximum Detail): Complete street network including all available local streets, neighborhood roads, and maximum cartographic detail.",
+    }
+
+    needed_gb = est_mb / 1024
+    has_space = free_gb > (needed_gb + 0.5)
+
+    return {
+        "tile_count": tile_count,
+        "tile_count_formatted": f"{tile_count:,}",
+        "estimated_mb": round(est_mb, 1),
+        "size_formatted": est_fmt,
+        "disk_free_gb": free_gb,
+        "disk_free_formatted": f"{free_gb} GB",
+        "has_space": has_space,
+        "description": weight_descriptions.get(weight, weight_descriptions["moderate"]),
+    }
 
 
 class TileDownloader:
@@ -140,7 +273,9 @@ class TileDownloader:
                 "message": self.message,
                 "tile_count": stats["tile_count"],
                 "size_formatted": stats["size_formatted"],
-                "max_limit_gb": stats.get("max_limit_gb", 25),
+                "disk_free_gb": stats["disk_free_gb"],
+                "disk_free_formatted": stats["disk_free_formatted"],
+                "max_limit_gb": stats.get("max_limit_gb", stats["disk_free_gb"]),
             }
 
     def cancel(self) -> dict[str, Any]:
@@ -152,10 +287,11 @@ class TileDownloader:
 
     def start_download(
         self,
-        package: str = "global",
+        package: str = "world",
         style: str = "topo",
         bounds: list[float] | None = None,
-        max_zoom: int = 6,
+        max_zoom: int | None = None,
+        weight: str = "moderate",
     ) -> dict[str, Any]:
         with self.lock:
             if self.downloading:
@@ -169,39 +305,45 @@ class TileDownloader:
 
         self._thread = threading.Thread(
             target=self._run_download,
-            args=(package, style, bounds, max_zoom),
+            args=(package, style, bounds, max_zoom, weight),
             daemon=True,
         )
         self._thread.start()
         return {"ok": True, "message": "Download started."}
 
     def _generate_tile_list(
-        self, package: str, bounds: list[float] | None, max_zoom: int
+        self,
+        package: str,
+        bounds: list[float] | None,
+        max_zoom: int | None,
+        weight: str = "moderate",
     ) -> list[tuple[int, int, int]]:
         tiles: list[tuple[int, int, int]] = []
 
-        if package in ("global", "global_base"):
-            # Global overview tiles up to zoom 6 (5,461 tiles, ~60 MB)
-            target_zoom = min(max_zoom, 6)
+        if package in ("world", "global", "global_base"):
+            zoom_map = {"light": 5, "moderate": 6, "heavy": 7, "full": 8}
+            target_zoom = max_zoom if max_zoom is not None else zoom_map.get(weight, 6)
             for z in range(target_zoom + 1):
                 n = 2 ** z
                 for x in range(n):
                     for y in range(n):
                         tiles.append((z, x, y))
 
-        elif package == "global_extended":
-            # Global extended tiles up to zoom 7 (21,845 tiles, ~250 MB)
-            target_zoom = min(max_zoom, 7)
+        elif package in ("world_ext", "global_extended"):
+            zoom_map = {"light": 6, "moderate": 7, "heavy": 8, "full": 9}
+            target_zoom = max_zoom if max_zoom is not None else zoom_map.get(weight, 7)
             for z in range(target_zoom + 1):
                 n = 2 ** z
                 for x in range(n):
                     for y in range(n):
                         tiles.append((z, x, y))
 
-        elif package in ("bounds", "region") and bounds and len(bounds) == 4:
+        elif package in ("country", "bounds", "region", "viewport") and bounds and len(bounds) == 4:
             min_lat, min_lng, max_lat, max_lng = bounds
-            min_z = max(0, max_zoom - 3)
-            for z in range(min_z, max_zoom + 1):
+            zoom_map = {"light": 8, "moderate": 10, "heavy": 12, "full": 14}
+            target_zoom = max_zoom if max_zoom is not None else zoom_map.get(weight, 10)
+            min_z = max(0, target_zoom - 4)
+            for z in range(min_z, target_zoom + 1):
                 x1, y2 = deg2num(min_lat, min_lng, z)
                 x2, y1 = deg2num(max_lat, max_lng, z)
                 xmin, xmax = min(x1, x2), max(x1, x2)
@@ -210,8 +352,7 @@ class TileDownloader:
                     for y in range(ymin, ymax + 1):
                         tiles.append((z, x, y))
         else:
-            # Default world base (zoom 0 to 5)
-            for z in range(5):
+            for z in range(6):
                 n = 2 ** z
                 for x in range(n):
                     for y in range(n):
@@ -242,10 +383,15 @@ class TileDownloader:
         return False
 
     def _run_download(
-        self, package: str, style: str, bounds: list[float] | None, max_zoom: int
+        self,
+        package: str,
+        style: str,
+        bounds: list[float] | None,
+        max_zoom: int | None,
+        weight: str = "moderate",
     ) -> None:
         source_template = MAP_SOURCES.get(style, MAP_SOURCES["topo"])
-        tile_list = self._generate_tile_list(package, bounds, max_zoom)
+        tile_list = self._generate_tile_list(package, bounds, max_zoom, weight)
 
         with self.lock:
             self.total = len(tile_list)
@@ -254,7 +400,7 @@ class TileDownloader:
         session = requests.Session()
         session.headers.update({"User-Agent": USER_AGENT})
 
-        max_bytes = 25 * 1024 * 1024 * 1024  # 25 GB limit
+        min_free_bytes = 500 * 1024 * 1024  # Ensure at least 500 MB remains on disk
         check_counter = 0
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=6) as executor:
@@ -280,18 +426,21 @@ class TileDownloader:
 
                 check_counter += 1
                 if check_counter % 200 == 0:
-                    stats = get_storage_stats()
-                    if stats.get("size_mb", 0) * 1024 * 1024 >= max_bytes:
-                        with self.lock:
-                            self.cancelled = True
-                            self.message = "Stopped: 25 GB offline storage limit reached."
-                        executor.shutdown(wait=False, cancel_futures=True)
-                        break
+                    try:
+                        free_bytes = shutil.disk_usage(OFFLINE_DIR if os.path.exists(OFFLINE_DIR) else BASE_DIR).free
+                        if free_bytes < min_free_bytes:
+                            with self.lock:
+                                self.cancelled = True
+                                self.message = "Stopped: Low disk space (< 500 MB remaining on disk)."
+                            executor.shutdown(wait=False, cancel_futures=True)
+                            break
+                    except Exception:
+                        pass
 
         with self.lock:
             self.downloading = False
             if self.cancelled:
-                if "limit reached" in self.message:
+                if "Low disk space" in self.message:
                     pass
                 else:
                     self.message = f"Cancelled ({self.completed}/{self.total} saved)."
