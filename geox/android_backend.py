@@ -216,6 +216,22 @@ class AndroidSession:
     def start(self):
         self.thread.start()
 
+    def update(self, cfg):
+        """Update Android mock location in-flight with zero delay or downtime."""
+        self.cfg = cfg
+        self.motion = build_motion(cfg)
+        if "lat" in cfg and "lng" in cfg:
+            self.last = (float(cfg["lat"]), float(cfg["lng"]))
+        self.engine.log(
+            f"[Android] AUTO SWAP -> {self.cfg.get('place') or ''} "
+            f"{self.last[0]:.5f}, {self.last[1]:.5f} (seamless transition)",
+            "good",
+        )
+        try:
+            self._send(*self.last, speed_mps=getattr(self.motion, "speed_mps", None))
+        except Exception as e:
+            self.engine.log(f"[Android] swap broadcast notice: {e}", "warn")
+
     def stop(self):
         self.stop_event.set()
 

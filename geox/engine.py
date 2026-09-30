@@ -127,6 +127,23 @@ class Engine:
         session.start()
         return session.snapshot()
 
+    def update(self, device_id, cfg):
+        """Seamlessly hot-swap location and motion settings without stopping the session or exposing real GPS."""
+        device = next((d for d in self.scan_devices() if d["id"] == device_id), None)
+        if device is None:
+            raise ValueError("That device is not connected (or not authorised) any more.")
+        self._validate_cfg(cfg)
+
+        session = self.sessions.get(device_id)
+        if not session or getattr(session, "state", None) not in ("active", "connecting"):
+            return self.start(device_id, cfg)
+
+        if hasattr(session, "update"):
+            session.update(cfg)
+        else:
+            return self.start(device_id, cfg)
+        return session.snapshot()
+
     def stop(self, device_id):
         session = self.sessions.pop(device_id, None)
         if not session:

@@ -130,6 +130,32 @@ main {
   letter-spacing: 0.6px;
 }
 .btn.primary:hover { filter: brightness(1.1); color: #05210f; }
+.active-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.btn.swap {
+  background: linear-gradient(135deg, #0284c7, #0ea5e9);
+  border-color: #38bdf8;
+  color: #ffffff;
+  width: 100%;
+  font-size: 14px;
+  font-weight: 700;
+  padding: 12px;
+  letter-spacing: 0.8px;
+  box-shadow: 0 0 14px rgba(14, 165, 233, 0.35);
+  animation: pulse-swap 2.5s infinite;
+}
+.btn.swap:hover {
+  filter: brightness(1.15);
+  box-shadow: 0 0 20px rgba(14, 165, 233, 0.6);
+  color: #ffffff;
+}
+@keyframes pulse-swap {
+  0%, 100% { box-shadow: 0 0 10px rgba(14, 165, 233, 0.25); }
+  50% { box-shadow: 0 0 18px rgba(14, 165, 233, 0.55); }
+}
 .btn.danger {
   background: rgba(239, 68, 68, 0.12);
   border-color: rgba(239, 68, 68, 0.4);

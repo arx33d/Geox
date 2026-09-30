@@ -384,8 +384,10 @@ async function poll() {
     $("devModeBtn").classList.toggle("hidden", !(selDev && selDev.platform === "ios"));
     const s = state.selected ? st.sessions.find((x) => x.device_id === state.selected) : st.sessions[0];
     state.session = s || null;
-    $("startBtn").classList.toggle("hidden", !!s && s.state !== "stopped" && s.state !== "failed");
-    $("stopBtn").classList.toggle("hidden", !s || s.state === "stopped" || s.state === "failed");
+    const isActive = !!s && s.state !== "stopped" && s.state !== "failed";
+    $("startBtn").classList.toggle("hidden", isActive);
+    const activeControls = $("activeControls");
+    if (activeControls) activeControls.classList.toggle("hidden", !isActive);
     renderSession(s);
     if (st.logs.length !== lastLogLen) {
       lastLogLen = st.logs.length;
@@ -414,9 +416,10 @@ $("installAdbBtn").addEventListener("click", async () => {
   } catch (e) { toast(e.message, "error"); }
 });
 
-$("startBtn").addEventListener("click", async () => {
-  if (!state.selected) { toast("Select a device first (step 1).", "error"); return; }
-  const body = { device_id: state.selected, place: state.target.place };
+function buildPayload() {
+  const devId = state.selected || (state.session && state.session.device_id);
+  if (!devId) throw new Error("Select a device first (step 1).");
+  const body = { device_id: devId, place: state.target.place };
   if (state.mode === "fixed") {
     Object.assign(body, { mode: "fixed", lat: state.target.lat, lng: state.target.lng });
   } else if (state.mode === "jitter") {
@@ -425,14 +428,14 @@ $("startBtn").addEventListener("click", async () => {
       radius_m: +$("radiusInput").value, speed_kmh: +$("roamSpeedInput").value,
     });
   } else if (state.mode === "custom") {
-    if (state.waypoints.length < 2) { toast("Click the map to add at least 2 waypoints.", "error"); return; }
+    if (state.waypoints.length < 2) throw new Error("Click the map to add at least 2 waypoints.");
     Object.assign(body, {
       mode: "route", waypoints: state.waypoints,
       speed_kmh: +$("customSpeedInput").value, loop: $("customLoop").value === "true",
       place: "Drawn route",
     });
   } else if (state.mode === "trip") {
-    if (!state.trip) { toast("Plan an itinerary first (Trip → Plan).", "error"); return; }
+    if (!state.trip) throw new Error("Plan an itinerary first (Trip → Plan).");
     Object.assign(body, {
       mode: "route", waypoints: state.trip.waypoints,
       seg_seconds: state.trip.seg_seconds,
@@ -441,12 +444,29 @@ $("startBtn").addEventListener("click", async () => {
       place: state.trip.dest_label,
     });
   }
+  return body;
+}
+
+$("startBtn").addEventListener("click", async () => {
   try {
+    const body = buildPayload();
     await api("/api/start", body);
     toast("Spoofing started.", "ok");
     poll();
   } catch (e) { toast(e.message, "error"); }
 });
+
+const autoSwapBtn = $("autoSwapBtn");
+if (autoSwapBtn) {
+  autoSwapBtn.addEventListener("click", async () => {
+    try {
+      const body = buildPayload();
+      await api("/api/swap", body);
+      toast("⚡ Auto swapped location seamlessly (no GPS blink).", "ok");
+      poll();
+    } catch (e) { toast(e.message, "error"); }
+  });
+}
 
 $("stopBtn").addEventListener("click", async () => {
   try {

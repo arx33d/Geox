@@ -350,6 +350,18 @@ class IosSession:
     def start(self):
         self.thread.start()
 
+    def update(self, cfg):
+        """Update coordinates/motion model in-place with zero downtime."""
+        self.cfg = cfg
+        self.motion = build_motion(cfg)
+        if "lat" in cfg and "lng" in cfg:
+            self.last = (float(cfg["lat"]), float(cfg["lng"]))
+        self.engine.log(
+            f"[iOS] AUTO SWAP -> {self.cfg.get('place') or ''} "
+            f"{self.last[0]:.5f}, {self.last[1]:.5f} (seamless transition)",
+            "good",
+        )
+
     def stop(self):
         self.stop_event.set()
 
@@ -401,7 +413,7 @@ class IosSession:
             serial=self.device["id"], autopair=True, pair_timeout=90
         )
         async with DvtProvider(lockdown) as dvt, LocationSimulation(dvt) as sim:
-            motion = build_motion(self.cfg)
+            self.motion = build_motion(self.cfg)
             tick = float(self.cfg.get("tick", 3.0))
             self.state = "active"
             self.engine.log(
@@ -410,10 +422,11 @@ class IosSession:
             )
             prev = time.time()
             while not self.stop_event.is_set():
-                await asyncio.sleep(0.25)
+                await asyncio.sleep(0.2)
                 now = time.time()
+                tick = float(self.cfg.get("tick", 3.0))
                 if now - prev >= tick:
-                    lat, lng = motion.step(now - prev)
+                    lat, lng = self.motion.step(now - prev)
                     await sim.set(lat, lng)
                     self.last = (lat, lng)
                     prev = now
@@ -445,9 +458,29 @@ class IosCliSession:
         self.proc = None
         self._out = []
         self.thread = threading.Thread(target=self._run, daemon=True)
+        self._current_gpx_path = None
 
     def start(self):
         self.thread.start()
+
+    def update(self, cfg):
+        """Seamlessly update GPX track and switch playback with zero downtime."""
+        self.cfg = cfg
+        self.motion = build_motion(cfg)
+        if "lat" in cfg and "lng" in cfg:
+            self.last = (float(cfg["lat"]), float(cfg["lng"]))
+        self._current_gpx_path = self._gpx_path(f"track-{int(time.time())}.gpx")
+        self._write_gpx(self._current_gpx_path)
+        self.engine.log(
+            f"[iOS17] AUTO SWAP -> {self.cfg.get('place') or ''} "
+            f"{self.last[0]:.5f}, {self.last[1]:.5f} (seamless transition)",
+            "good",
+        )
+        if self.proc and self.proc.poll() is None:
+            try:
+                self.proc.kill()
+            except Exception:
+                pass
 
     def stop(self):
         self.stop_event.set()
@@ -575,8 +608,9 @@ class IosCliSession:
         reconnects on its own instead of failing.
         """
         self.motion = None
-        path = self._gpx_path(f"track-{int(time.time())}.gpx")
-        self._write_gpx(path)
+        if not self._current_gpx_path:
+            self._current_gpx_path = self._gpx_path(f"track-{int(time.time())}.gpx")
+        self._write_gpx(self._current_gpx_path)
         self.state = "active"
         on_msg = (
             f"[iOS17] spoofing ON → {self.cfg.get('place') or ''}"
@@ -587,7 +621,7 @@ class IosCliSession:
         while not self.stop_event.is_set():
             self._out = []
             started = time.time()
-            self.proc = self._launch(gpx=path)
+            self.proc = self._launch(gpx=self._current_gpx_path)
             pump = threading.Thread(target=self._pump, args=(self.proc,), daemon=True)
             pump.start()
             while not self.stop_event.is_set() and self.proc.poll() is None:

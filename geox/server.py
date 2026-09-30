@@ -51,6 +51,22 @@ def api_start():
     return jsonify(snapshot=snap)
 
 
+@app.post("/api/swap")
+@app.post("/api/update")
+def api_swap():
+    data = request.get_json(force=True, silent=True) or {}
+    device_id = data.get("device_id")
+    if not device_id:
+        return jsonify(error="Pick a device first."), 400
+    try:
+        snap = engine.update(device_id, data)
+    except ValueError as e:
+        return jsonify(error=str(e)), 400
+    except Exception as e:  # noqa: BLE001
+        return jsonify(error=f"Could not swap location: {e}"), 500
+    return jsonify(snapshot=snap)
+
+
 @app.post("/api/stop")
 def api_stop():
     data = request.get_json(force=True, silent=True) or {}

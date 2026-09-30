@@ -122,7 +122,10 @@
     <section class="card">
       <h2><span class="step">4</span> Control</h2>
       <button id="startBtn" class="btn primary">START SPOOFING</button>
-      <button id="stopBtn" class="btn danger hidden">STOP — restore real GPS</button>
+      <div id="activeControls" class="active-controls hidden">
+        <button id="autoSwapBtn" class="btn swap" title="Instantly switch to the new selected location on map with zero downtime or real GPS delay">⚡ AUTO SWAP</button>
+        <button id="stopBtn" class="btn danger">STOP — restore real GPS</button>
+      </div>
       <div id="sessionCard" class="session hidden"></div>
     </section>
 
