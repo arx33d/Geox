@@ -699,7 +699,7 @@ class IosCliSession:
                     return
             time.sleep(min(3.0, 0.5 * consecutive))
             try:
-                self._write_gpx(path)
+                self._write_gpx(self._current_gpx_path)
             except Exception as e:
                 self.engine.log(f"[iOS17] could not regenerate track: {e}", "error")
         self.state = "stopped"
