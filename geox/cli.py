@@ -11,9 +11,10 @@ import os
 import re
 import signal
 import sys
+import threading
 import time
 
-from .engine import Engine
+from .engine import get_engine
 from .router import PRESETS, geocode_name, parse_trip_input, plan_route, resolve_location_input
 
 
@@ -372,7 +373,7 @@ def main(argv=None):
 
     parser = build_cli_parser()
     args = parser.parse_args(argv)
-    engine = Engine()
+    engine = get_engine()
 
     # Handle explicit commands or action flags
     cmd = args.command
@@ -385,7 +386,11 @@ def main(argv=None):
             threading_timer = threading.Timer(1.2, lambda: webbrowser.open(f"http://127.0.0.1:{args.port}"))
             threading_timer.daemon = True
             threading_timer.start()
-        server.app.run(host="127.0.0.1", port=args.port, debug=False)
+        try:
+            from waitress import serve
+            serve(server.app, host="127.0.0.1", port=args.port, threads=8)
+        except ImportError:
+            server.app.run(host="127.0.0.1", port=args.port, threaded=True, debug=False)
         return 0
 
     if cmd == "devices" or args.list_devices:

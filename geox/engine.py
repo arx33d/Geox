@@ -70,7 +70,10 @@ class Engine:
         except Exception:
             pass
 
-    # ------------------------------------------------------------------ logs
+
+
+
+# ------------------------------------------------------------------ logs
     def log(self, msg, level="info"):
         now = time.time()
         key = (msg, level)
@@ -239,3 +242,15 @@ class Engine:
             "logs": logs,
             "capabilities": self.capabilities(),
         }
+
+
+_SINGLETON = None
+
+
+def get_engine():
+    """One shared Engine per process: the Web UI and the CLI must not keep
+    separate session states."""
+    global _SINGLETON
+    if _SINGLETON is None:
+        _SINGLETON = Engine()
+    return _SINGLETON

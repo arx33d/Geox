@@ -12,10 +12,10 @@ import requests
 from flask import Flask, jsonify, request, send_from_directory
 
 from .android_backend import AndroidError, install_adb, setup_bridge
-from .engine import Engine
+from .engine import get_engine
 
 app = Flask(__name__, static_folder="../web", static_url_path="")
-engine = Engine()
+engine = get_engine()
 
 NOMINATIM = "https://nominatim.openstreetmap.org"
 HEADERS = {"User-Agent": "Geox/1.0 (personal GPS-spoofing desktop app)"}
