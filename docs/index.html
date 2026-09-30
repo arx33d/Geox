@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Geox — free GPS location spoofer for connected phones</title>
+<meta name="description" content="Change the GPS location of an iPhone or Android connected to your PC. Find My, Snap Map and every other app see the fake location. Free and open to use.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230a0a0b'/%3E%3Ctext x='16' y='22' font-size='14' font-family='Arial' font-weight='bold' fill='%2322c55e' text-anchor='middle'%3EG%3C/text%3E%3C/svg%3E">
+<style>
+  :root {
+    --bg: #0a0a0b; --panel: #141416; --panel2: #1b1b1f;
+    --border: #26262b; --border2: #333338;
+    --text: #e8e8ea; --muted: #8b8b93;
+    --green: #22c55e; --green-soft: rgba(34,197,94,.12); --green-line: rgba(34,197,94,.35);
+  }
+  * { box-sizing: border-box; margin: 0; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+    line-height: 1.6;
+  }
+  .wrap { max-width: 1000px; margin: 0 auto; padding: 0 24px; }
+
+  header {
+    position: sticky; top: 0; z-index: 10;
+    background: rgba(10,10,11,.85); backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--border);
+  }
+  .nav { display: flex; align-items: center; gap: 14px; height: 62px; }
+  .logo {
+    font-weight: 800; font-size: 19px; letter-spacing: 3px; color: var(--green);
+    background: var(--green-soft); border: 1px solid var(--green-line);
+    border-radius: 11px; padding: 5px 12px;
+  }
+  .nav .spacer { flex: 1; }
+  .nav a { color: var(--muted); text-decoration: none; font-size: 14px; }
+  .nav a:hover { color: var(--green); }
+
+  .hero { text-align: center; padding: 72px 0 48px; }
+  .hero h1 { font-size: 40px; line-height: 1.15; letter-spacing: -.5px; }
+  .hero h1 em { font-style: normal; color: var(--green); }
+  .hero p { color: var(--muted); font-size: 18px; max-width: 680px; margin: 18px auto 0; }
+  .cta { display: flex; gap: 12px; justify-content: center; margin-top: 30px; flex-wrap: wrap; }
+  .btn {
+    display: inline-block; padding: 13px 26px; border-radius: 12px;
+    font-weight: 700; font-size: 15px; text-decoration: none; transition: all .15s;
+  }
+  .btn.primary { background: var(--green); color: #05210f; }
+  .btn.primary:hover { filter: brightness(1.1); }
+  .btn.ghost { border: 1px solid var(--border2); color: var(--text); }
+  .btn.ghost:hover { border-color: var(--green-line); color: var(--green); }
+  .version { color: var(--muted); font-size: 12.5px; margin-top: 14px; }
+
+  .shot {
+    margin: 40px auto 0; max-width: 900px;
+    border: 1px solid var(--border); border-radius: 18px; overflow: hidden;
+    box-shadow: 0 20px 60px rgba(0,0,0,.5);
+  }
+  .shot img { width: 100%; display: block; }
+
+  section { padding: 56px 0; }
+  section h2 { font-size: 26px; margin-bottom: 8px; }
+  section .sub { color: var(--muted); margin-bottom: 28px; }
+
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px; }
+  .card {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 16px; padding: 22px;
+  }
+  .card h3 { font-size: 16px; margin-bottom: 8px; color: var(--green); }
+  .card p { color: #c8c8cc; font-size: 14px; }
+
+  .steps { counter-reset: step; }
+  .step {
+    display: flex; gap: 16px; align-items: flex-start;
+    background: var(--panel); border: 1px solid var(--border); border-radius: 14px;
+    padding: 16px 20px; margin-bottom: 10px;
+  }
+  .step::before {
+    counter-increment: step; content: counter(step);
+    flex: 0 0 34px; height: 34px; display: grid; place-items: center;
+    background: var(--green-soft); border: 1px solid var(--green-line);
+    color: var(--green); border-radius: 10px; font-weight: 800;
+  }
+  code {
+    background: var(--panel2); border: 1px solid var(--border);
+    border-radius: 6px; padding: 1px 7px; font-size: 13px;
+    font-family: Consolas, "Cascadia Mono", monospace;
+  }
+  .terminal {
+    background: #0d0d0f; border: 1px solid var(--border); border-radius: 14px;
+    padding: 18px 22px; font-family: Consolas, monospace; font-size: 13.5px;
+    color: #a6a6ae; margin: 18px 0;
+  }
+  .terminal b { color: var(--green); font-weight: 600; }
+
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  @media (max-width: 720px) { .two { grid-template-columns: 1fr; } .hero h1 { font-size: 30px; } }
+
+  .note {
+    background: var(--panel); border: 1px solid rgba(239,68,68,.35); border-radius: 16px;
+    padding: 20px 24px; color: #c8c8cc; font-size: 14px;
+  }
+  .note b { color: var(--text); }
+
+  footer { border-top: 1px solid var(--border); padding: 30px 0 44px; color: var(--muted); font-size: 13.5px; }
+  footer a { color: var(--green); text-decoration: none; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap nav">
+    <div class="logo">GEOX</div>
+    <span class="spacer"></span>
+    <a href="#features">Features</a>
+    <a href="#how">How it works</a>
+    <a href="#start">Quick start</a>
+    <a href="https://github.com/arx33d/Geox">GitHub</a>
+  </div>
+</header>
+
+<div class="wrap hero">
+  <h1>Spoof the GPS of a connected phone.<br><em>Every app believes it.</em></h1>
+  <p>Geox changes the GPS location of an iPhone or Android while it is plugged into your PC.
+     Find My, Snap Map, Google Maps, WhatsApp live location: they all see wherever you point it.
+     You sit in Vancouver; the world sees you in Antarctica.</p>
+  <div class="cta">
+    <a class="btn primary" href="https://github.com/arx33d/Geox/releases/latest">Download latest release</a>
+    <a class="btn ghost" href="https://github.com/arx33d/Geox">View source on GitHub</a>
+  </div>
+  <div class="version">Free to use, modify and redistribute. Not to be sold. MIT + Commons Clause.</div>
+  <div class="shot"><img src="screenshot.png" alt="The Geox app planning a trip itinerary"></div>
+</div>
+
+<section id="features">
+  <div class="wrap">
+    <h2>Features</h2>
+    <p class="sub">Everything the paid spoofing tools do, without the subscription.</p>
+    <div class="grid">
+      <div class="card"><h3>OS-level GPS spoofing</h3><p>The phone itself reports the fake coordinates. Not a VPN trick: the operating system location service is what lies, so Find My, Snap Map and every other app see the same fake fix.</p></div>
+      <div class="card"><h3>AutoSwap</h3><p>Change destination mid-spoof with zero downtime. The next location warms up before the current one retires: the real GPS never shows for even a second.</p></div>
+      <div class="card"><h3>Real trip itineraries</h3><p>Follow actual streets to a destination at actual road speeds: fast on highways, slow in city streets. Paste a Google Maps link or search any place.</p></div>
+      <div class="card"><h3>Roam and Draw</h3><p>Drift around a radius at walking speed so your pin looks alive, or draw a custom route on the map and travel it at any speed.</p></div>
+      <div class="card"><h3>Self-installing</h3><p>One batch file. No Python, no admin rights, no setup: the first run downloads everything automatically. Zip the folder and share it.</p></div>
+      <div class="card"><h3>Self-healing sessions</h3><p>The fake fix is re-asserted every second, tunnel blips auto-reconnect, and a phone that drops off USB is waited for and resumed.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="how" style="background:var(--panel); border-top:1px solid var(--border); border-bottom:1px solid var(--border);">
+  <div class="wrap">
+    <h2>How it works</h2>
+    <p class="sub">No jailbreak, nothing installed on the phone. It uses the platforms' own mechanisms.</p>
+    <div class="two">
+      <div class="card"><h3>iPhone, iOS 15 to current</h3><p>Geox opens Apple's own Instruments location-simulation channel over USB: the exact mechanism Xcode uses. On iOS 17+ it runs through an encrypted developer tunnel that Geox establishes for you. The OS then reports the simulated fix as if it were real GPS, which is why Find My and Snap Map show the fake place.</p></div>
+      <div class="card"><h3>Android</h3><p>Android has an official mock-location provider API. Geox installs a tiny companion app, grants it the capability over ADB, and broadcasts fresh coordinates to it every two seconds. The bridge feeds them into the OS as GPS fixes.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="start">
+  <div class="wrap">
+    <h2>Quick start</h2>
+    <p class="sub">From download to spoofing in about two minutes.</p>
+    <div class="steps">
+      <div class="step"><div><b>Download and run.</b> Grab the latest release, unzip, and double-click <code>run_geox.bat</code>. The browser opens the app automatically.</div></div>
+      <div class="step"><div><b>Plug the phone in.</b> USB cable, unlock it, accept the trust prompt, then press Refresh devices in Geox.</div></div>
+      <div class="step"><div><b>Pick a spot.</b> Search any place, click the map, or use a preset. Then press <b>START SPOOFING</b>. The red STOP button restores the real GPS instantly.</div></div>
+    </div>
+    <div class="terminal">
+      &gt; <b>run_geox.bat</b><br>
+      Geox running → http://127.0.0.1:7876<br>
+      Keep this window open while spoofing.
+    </div>
+    <div class="two">
+      <div class="card"><h3>What an iPhone needs (once)</h3><p>Apple's USB drivers (the Apple Devices app; Geox starts the service itself), tapping Trust, and Developer Mode ON. Geox reveals the switch and walks you through it. Nothing is installed on the phone.</p></div>
+      <div class="card"><h3>What an Android needs (once)</h3><p>USB debugging enabled, plus a one-time build of the Geox Bridge companion app from the repo. After that, Geox installs and configures it on any connected phone by itself.</p></div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2>Honest notes</h2>
+    <p class="sub">What Geox can and cannot do.</p>
+    <div class="grid">
+      <div class="card"><h3>It spoofs GPS only</h3><p>Your IP address still shows your real region unless you also use a VPN at the spoofed location. History-based features remember jumps, so use Trip or Roam for believable movement.</p></div>
+      <div class="card"><h3>The phone stays connected</h3><p>The simulation is a live USB session. Lock the phone, put it in your pocket: it keeps working. Unplug the cable and the real GPS returns.</p></div>
+      <div class="card"><h3>Use it responsibly</h3><p>Geox changes the location of your own device. Faking attendance, cheating delivery or ride apps, or deceiving people whose safety depends on your location can be fraud or a terms-of-service violation. You are responsible for how you use it.</p></div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <p><b style="color:var(--text)">GEOX</b> — free GPS location spoofing for connected phones. Licensed MIT with a Commons Clause: free to use and share, not to be sold.</p>
+    <p>Source and full documentation on <a href="https://github.com/arx33d/Geox">GitHub</a>. The long-form guide lives in <a href="https://github.com/arx33d/Geox/blob/main/EXPLANATION.md">EXPLANATION.md</a>.</p>
+  </div>
+</footer>
+
+</body>
+</html>
