@@ -1407,7 +1407,7 @@ function initSettingsUI() {
   if ($("cancelOfflineDownloadBtn")) {
     $("cancelOfflineDownloadBtn").addEventListener("click", async () => {
       try {
-        await api("/api/offline/cancel");
+        await api("/api/offline/cancel", {});
         toast("Download cancellation requested.", "ok");
         setTimeout(refreshOfflineStats, 500);
       } catch (err) {
@@ -1421,7 +1421,7 @@ function initSettingsUI() {
     $("clearOfflineCacheBtn").addEventListener("click", async () => {
       if (!confirm("Clear all downloaded offline map tiles? This cannot be undone.")) return;
       try {
-        await api("/api/offline/clear");
+        await api("/api/offline/clear", {});
         toast("Offline map cache cleared.", "ok");
         refreshOfflineStats();
         updateDownloadEstimate();

@@ -279,12 +279,20 @@ def api_offline_regions():
     return jsonify(results=search_countries(q))
 
 
-@app.post("/api/offline/download")
+@app.route("/api/offline/download", methods=["GET", "POST"])
 def api_offline_download():
-    data = request.get_json(force=True, silent=True) or {}
+    if request.method == "POST":
+        data = request.get_json(force=True, silent=True) or {}
+    else:
+        data = request.args.to_dict()
     package = data.get("package", "world")
     style = data.get("style", "topo")
     bounds = data.get("bounds")
+    if isinstance(bounds, str):
+        try:
+            bounds = [float(x.strip()) for x in bounds.split(",")]
+        except Exception:
+            bounds = None
     max_zoom = data.get("max_zoom")
     if max_zoom is not None:
         try:
@@ -309,12 +317,12 @@ def api_offline_download():
     return jsonify(res)
 
 
-@app.post("/api/offline/cancel")
+@app.route("/api/offline/cancel", methods=["GET", "POST"])
 def api_offline_cancel():
     return jsonify(get_downloader().cancel())
 
 
-@app.post("/api/offline/clear")
+@app.route("/api/offline/clear", methods=["GET", "POST"])
 def api_offline_clear():
     return jsonify(clear_cache())
 

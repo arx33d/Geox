@@ -212,10 +212,22 @@ class TestOfflineCapabilities(unittest.TestCase):
         self.assertIn("United Kingdom", names)
 
     def test_offline_clear_api(self):
-        res = self.client.post("/api/offline/clear")
-        self.assertEqual(res.status_code, 200)
-        data = res.get_json()
-        self.assertTrue(data.get("ok"))
+        res1 = self.client.post("/api/offline/clear")
+        self.assertEqual(res1.status_code, 200)
+        self.assertTrue(res1.get_json().get("ok"))
+
+        res2 = self.client.get("/api/offline/clear")
+        self.assertEqual(res2.status_code, 200)
+        self.assertTrue(res2.get_json().get("ok"))
+
+    def test_offline_cancel_api(self):
+        res1 = self.client.post("/api/offline/cancel")
+        self.assertEqual(res1.status_code, 200)
+        self.assertTrue(res1.get_json().get("ok"))
+
+        res2 = self.client.get("/api/offline/cancel")
+        self.assertEqual(res2.status_code, 200)
+        self.assertTrue(res2.get_json().get("ok"))
 
 
 if __name__ == "__main__":
