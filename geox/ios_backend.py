@@ -345,6 +345,7 @@ class IosSession:
         self.error = None
         self.last = (float(cfg["lat"]), float(cfg["lng"]))
         self.started_at = time.time()
+        self.motion = None
         self.thread = threading.Thread(target=self._run, daemon=True)
 
     def start(self):
@@ -457,8 +458,24 @@ class IosCliSession:
         self.started_at = time.time()
         self.proc = None
         self._out = []
+        self._procs = []  # every CLI process launched by this session
+        self._swap_lock = threading.Lock()
         self.thread = threading.Thread(target=self._run, daemon=True)
         self._current_gpx_path = None
+
+    def _track_proc(self, proc):
+        self._procs = [p for p in self._procs if p.poll() is None]
+        self._procs.append(proc)
+        return proc
+
+    def _kill_others(self, keep):
+        for p in self._procs:
+            if p is not keep and p.poll() is None:
+                try:
+                    p.kill()
+                except Exception:
+                    pass
+        self._procs = [p for p in self._procs if p.poll() is None]
 
     def start(self):
         self.thread.start()
@@ -468,66 +485,73 @@ class IosCliSession:
 
         Launches a second simulation process with the new track while the old
         one keeps asserting, waits until the new process is provably asserting
-        (its "set location" log line), and only then retires the old process.
-        Both fake locations may briefly alternate, but the real one never wins.
+        (its "set location" log line), and only then retires every other
+        process.  Rapid consecutive swaps are serialized, so processes can
+        never be orphaned flapping against each other.
         """
-        self.cfg = cfg
-        self.motion = build_motion(cfg)
-        if "lat" in cfg and "lng" in cfg:
-            self.last = (float(cfg["lat"]), float(cfg["lng"]))
-        path = self._gpx_path(f"track-{int(time.time())}.gpx")
-        self._write_gpx(path)
-        self._current_gpx_path = path
+        with self._swap_lock:
+            self.cfg = cfg
+            self.motion = build_motion(cfg)
+            if "lat" in cfg and "lng" in cfg:
+                self.last = (float(cfg["lat"]), float(cfg["lng"]))
+            path = self._gpx_path(f"track-{int(time.time() * 1000)}.gpx")
+            self._write_gpx(path)
+            self._current_gpx_path = path
 
-        new_proc = self._launch(gpx=path)
-        buf = []
-        pump = threading.Thread(target=self._pump, args=(new_proc, buf), daemon=True)
-        pump.start()
-        old_proc = self.proc
+            new_proc = self._launch(gpx=path)
+            buf = []
+            pump = threading.Thread(target=self._pump, args=(new_proc, buf), daemon=True)
+            pump.start()
 
-        # wait for the first assertion from the new process (tunnel included)
-        deadline = time.time() + 120
-        confirmed = False
-        while time.time() < deadline:
-            if new_proc.poll() is not None:
-                break
-            if any("set location" in line.lower() for line in buf):
-                confirmed = True
-                break
-            time.sleep(0.25)
+            # wait for the first assertion from the new process (tunnel included)
+            deadline = time.time() + 120
+            confirmed = False
+            while time.time() < deadline:
+                if new_proc.poll() is not None:
+                    break
+                if any("set location" in line.lower() for line in buf):
+                    confirmed = True
+                    break
+                time.sleep(0.25)
 
-        if not confirmed:
-            # the replacement failed: keep the running spoof untouched
-            try:
-                new_proc.kill()
-            except Exception:
-                pass
-            output = _strip_ansi("\n".join(buf))
-            msg = _cli_failure_message(output) or (
-                "the replacement session could not establish a tunnel; "
-                "kept the current spoof"
+            if not confirmed:
+                # the replacement failed: keep the running spoof untouched
+                try:
+                    new_proc.kill()
+                except Exception:
+                    pass
+                self._procs = [p for p in self._procs if p is not new_proc]
+                output = _strip_ansi("\n".join(buf))
+                msg = _cli_failure_message(output) or (
+                    "the replacement session could not establish a tunnel; "
+                    "kept the current spoof"
+                )
+                self.engine.log(
+                    f"[iOS17] AutoSwap aborted, current spoof untouched: {msg}", "error"
+                )
+                return False
+
+            # the new process is asserting; retire every other process
+            self.proc = new_proc  # the watch loop now follows the new process
+            self._out = buf
+            self._kill_others(new_proc)
+            self.state = "active"
+            self.engine.log(
+                f"[iOS17] AUTO SWAP -> {self.cfg.get('place') or ''} "
+                f"{self.last[0]:.5f}, {self.last[1]:.5f} (seamless, real GPS never shown)",
+                "good",
             )
-            self.engine.log(f"[iOS17] AutoSwap aborted, current spoof untouched: {msg}", "error")
-            return False
-
-        # the new process is asserting; retire the old one
-        self.proc = new_proc  # the watch loop now follows the new process
-        self._out = buf
-        if old_proc and old_proc.poll() is None:
-            try:
-                old_proc.kill()
-            except Exception:
-                pass
-        self.state = "active"
-        self.engine.log(
-            f"[iOS17] AUTO SWAP -> {self.cfg.get('place') or ''} "
-            f"{self.last[0]:.5f}, {self.last[1]:.5f} (seamless, real GPS never shown)",
-            "good",
-        )
-        return True
+            return True
 
     def stop(self):
         self.stop_event.set()
+        # retire every process this session ever spawned (AutoSwap overlap,
+        # reconnects), so none of them keeps asserting an old location
+        for p in list(getattr(self, "_procs", [])):
+            try:
+                p.kill()
+            except Exception:
+                pass
 
     def snapshot(self):
         return {
@@ -599,7 +623,7 @@ class IosCliSession:
             cmd += ["play", str(gpx)]
         # stdin stays open so the CLI's "Press ENTER to exit" wait blocks
         # instead of reading EOF and aborting the session
-        return subprocess.Popen(
+        return self._track_proc(subprocess.Popen(
             cmd,
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
@@ -608,7 +632,7 @@ class IosCliSession:
             encoding="utf-8",
             errors="replace",
             creationflags=CREATE_NO_WINDOW,
-        )
+        ))
 
     def _run(self):
         try:

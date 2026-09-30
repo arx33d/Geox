@@ -1,5 +1,7 @@
 """Session manager: device discovery + one spoofing session per device."""
 
+import os
+import subprocess
 import threading
 import time
 from collections import deque
@@ -46,7 +48,27 @@ class Engine:
         self._scan_lock = threading.Lock()
         self.adb_install_running = False
         self._last_shown = {}
+        self._reap_orphans()
         self.log("[Geox] engine ready. Connect a phone with USB and hit refresh.", "good")
+
+    def _reap_orphans(self):
+        """Kill simulation processes orphaned by a previous crashed/restarted
+        server: they keep asserting their old location forever, which shows up
+        as the phone flapping between two places."""
+        if os.name != "nt":
+            return
+        try:
+            p = subprocess.run(
+                ["taskkill", "/F", "/IM", "pymobiledevice3.exe"],
+                capture_output=True, text=True, encoding="utf-8", errors="replace",
+                creationflags=0x08000000,
+            )
+            killed = (p.stdout or "").upper().count("SUCCESS")
+            if killed:
+                self.log(f"[Geox] reaped {killed} orphaned spoofing process(es) "
+                         "left over from a previous run.", "warn")
+        except Exception:
+            pass
 
     # ------------------------------------------------------------------ logs
     def log(self, msg, level="info"):

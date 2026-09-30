@@ -466,6 +466,10 @@ async function poll() {
         lng: s.last[1],
         place: s.place || "",
       };
+      // page reloaded mid-spoof: sync the target to the running spoof so the
+      // AutoSwap button doesn't offer a stale default location instead
+      state.target = { lat: s.last[0], lng: s.last[1], place: s.place || "" };
+      syncCoordInputs();
     } else if (!s || s.state === "stopped" || s.state === "failed") {
       state.activeTarget = null;
     }
