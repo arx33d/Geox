@@ -183,6 +183,9 @@ function setMode(mode) {
   $("roamOpts").classList.toggle("hidden", mode !== "jitter");
   $("customOpts").classList.toggle("hidden", mode !== "custom");
   $("tripOpts").classList.toggle("hidden", mode !== "trip");
+  // in Trip mode the marker is where the phone really is, not where it fakes being
+  $("destHeadingText").textContent = mode === "trip" ? "Starting point" : "Destination";
+  $("liveLocBtn").classList.toggle("hidden", mode !== "trip");
   redrawOverlays();
   if (typeof updateControlButtons === "function") updateControlButtons();
 }
@@ -494,6 +497,28 @@ function refresh(force) {
 }
 
 /* ------------------------------------------------------------- controls */
+$("liveLocBtn").addEventListener("click", () => {
+  if (!navigator.geolocation) {
+    toast("This browser does not support geolocation.", "error");
+    return;
+  }
+  const b = $("liveLocBtn");
+  b.disabled = true;
+  b.textContent = "Locating...";
+  navigator.geolocation.getCurrentPosition(async (pos) => {
+    const { latitude, longitude, accuracy } = pos.coords;
+    setTarget(latitude, longitude, "");
+    b.disabled = false;
+    b.textContent = "Use my live location";
+    toast(`Live location found (accuracy of about ${Math.round(accuracy)} m).`, "ok");
+    reverseGeocode();
+  }, (err) => {
+    b.disabled = false;
+    b.textContent = "Use my live location";
+    toast("Could not get the live location: " + err.message + " Allow location access for this page.", "error");
+  }, { enableHighAccuracy: true, timeout: 15000 });
+});
+
 $("refreshBtn").addEventListener("click", () => refresh(true));
 $("devModeBtn").addEventListener("click", enableDevMode);
 $("installAdbBtn").addEventListener("click", async () => {

@@ -29,12 +29,15 @@
     </section>
 
     <section class="card">
-      <h2><span class="step">2</span> Destination</h2>
+      <h2><span class="step">2</span> <span id="destHeadingText">Destination</span></h2>
       <div class="row" style="margin-top:0">
         <input id="searchInput" type="text" placeholder="Search a place — e.g. McMurdo Station">
         <button id="searchBtn" class="btn small" style="flex:0 0 auto">Go</button>
       </div>
       <div id="searchResults" class="results hidden"></div>
+      <div class="row">
+        <button id="liveLocBtn" class="btn ghost small hidden">Use my live location</button>
+      </div>
       <div id="presets" class="chips"></div>
       <div class="row coords">
         <input id="latInput" type="number" step="0.00001" placeholder="Latitude">
@@ -111,7 +114,7 @@
         </div>
         <div id="tripSummary" class="tripsummary hidden"></div>
         <div class="hint" id="tripHint">
-          Start point = <b>the map marker</b> (move it to where the phone really is).
+          Start point = <b>the map marker</b>, or press <b>Use my live location</b> (the PC's Wi-Fi/IP position, which is where the phone is since it's plugged into it).
           Speeds follow the real road: fast on highways, slow in city streets.
           A factor of 2 travels twice as fast; Bus/Metro holds a transit-like average
           since free routers don't publish live timetables.
