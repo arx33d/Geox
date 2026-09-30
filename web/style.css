@@ -634,3 +634,224 @@ label.optlabel {
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
 }
+
+/* ------------------------------------------------------------- settings */
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.btn-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: var(--panel-2);
+  border: 1px solid var(--border-2);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.btn-icon:hover {
+  color: #fff;
+  border-color: #3f3f50;
+  background: #202027;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(5px);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.modal-backdrop.hidden {
+  display: none !important;
+}
+
+.modal-card {
+  background: #111115;
+  border: 1px solid #1f1f26;
+  border-radius: 16px;
+  width: 520px;
+  max-width: 92vw;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 24px 48px rgba(0, 0, 0, 0.7);
+  animation: modalEnter 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes modalEnter {
+  from {
+    transform: scale(0.96) translateY(8px);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1) translateY(0);
+    opacity: 1;
+  }
+}
+
+.modal-head {
+  padding: 16px 20px;
+  border-bottom: 1px solid #1f1f26;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.modal-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 700;
+  font-size: 14px;
+  color: #f4f4f5;
+  letter-spacing: 0.3px;
+}
+.modal-title svg {
+  color: var(--green);
+}
+.btn-close {
+  background: transparent;
+  border: none;
+  color: #71717a;
+  cursor: pointer;
+  padding: 6px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s ease;
+}
+.btn-close:hover {
+  color: #fff;
+  background: #1f1f26;
+}
+
+.settings-tabs {
+  display: flex;
+  gap: 6px;
+  padding: 10px 20px;
+  background: #0d0d10;
+  border-bottom: 1px solid #1f1f26;
+}
+.settings-tab-btn {
+  background: transparent;
+  border: none;
+  color: #71717a;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 6px 14px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.settings-tab-btn:hover {
+  color: #e4e4e7;
+}
+.settings-tab-btn.on {
+  color: var(--green);
+  background: var(--panel-2);
+}
+
+.modal-body {
+  padding: 20px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.tab-content {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.tab-content.hidden {
+  display: none !important;
+}
+
+.setting-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+.setting-item:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+.setting-info {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.setting-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #e4e4e7;
+}
+.setting-desc {
+  font-size: 11.5px;
+  color: #71717a;
+  line-height: 1.4;
+}
+
+.toggle-switch {
+  position: relative;
+  display: inline-block;
+  width: 40px;
+  height: 22px;
+  flex-shrink: 0;
+}
+.toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+.toggle-slider {
+  position: absolute;
+  cursor: pointer;
+  inset: 0;
+  background-color: #27272a;
+  border-radius: 999px;
+  border: 1px solid #3f3f46;
+  transition: all 0.2s ease;
+}
+.toggle-slider:before {
+  position: absolute;
+  content: "";
+  height: 16px;
+  width: 16px;
+  left: 2px;
+  bottom: 2px;
+  background-color: #a1a1aa;
+  border-radius: 50%;
+  transition: all 0.2s ease;
+}
+.toggle-switch input:checked + .toggle-slider {
+  background-color: rgba(34, 197, 94, 0.2);
+  border-color: var(--green);
+}
+.toggle-switch input:checked + .toggle-slider:before {
+  transform: translateX(18px);
+  background-color: var(--green);
+}
+
+.modal-footer {
+  padding: 14px 20px;
+  border-top: 1px solid #1f1f26;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: #0c0c0f;
+  border-bottom-left-radius: 16px;
+  border-bottom-right-radius: 16px;
+}

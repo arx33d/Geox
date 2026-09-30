@@ -17,13 +17,66 @@ const state = {
   pickMode: false,
 };
 
+/* ---------------------------------------------------------------- settings */
+const DEFAULT_SETTINGS = {
+  mapTheme: "esri-dark",
+  autoCenter: true,
+  units: "metric",
+  showHud: true,
+  pollInterval: 1000,
+  defaultRadius: 120,
+  defaultRoamSpeed: 4.5,
+  defaultTripFactor: 1.0,
+};
+
+let userSettings = Object.assign({}, DEFAULT_SETTINGS);
+
+function loadSettings() {
+  try {
+    const raw = localStorage.getItem("geox_settings");
+    if (raw) Object.assign(userSettings, JSON.parse(raw));
+  } catch (e) { /* ignore */ }
+}
+
+function saveSettings() {
+  try {
+    localStorage.setItem("geox_settings", JSON.stringify(userSettings));
+  } catch (e) { /* ignore */ }
+}
+loadSettings();
+
 /* ------------------------------------------------------------------ map */
 const map = L.map("map", { zoomControl: true }).setView([state.target.lat, state.target.lng], 5);
-// Esri World Dark Gray Canvas — free, no API key, matches the theme
-L.tileLayer(
-  "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}",
-  { attribution: "Tiles &copy; Esri &mdash; Esri, DeLorme, NAVTEQ", maxZoom: 16 },
-).addTo(map);
+
+const MAP_THEMES = {
+  "esri-dark": {
+    url: "https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}",
+    options: { attribution: "Tiles &copy; Esri &mdash; Esri, DeLorme, NAVTEQ", maxZoom: 16 },
+  },
+  "carto-dark": {
+    url: "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
+    options: { attribution: "&copy; OpenStreetMap contributors &copy; CARTO", subdomains: "abcd", maxZoom: 19 },
+  },
+  "osm-standard": {
+    url: "https://{s}.tile.openstreetmap.org/{z}/{y}/{x}.png",
+    options: { attribution: "&copy; OpenStreetMap contributors", maxZoom: 19 },
+  },
+  "esri-satellite": {
+    url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
+    options: { attribution: "Tiles &copy; Esri", maxZoom: 18 },
+  },
+};
+
+let currentTileLayer = null;
+function setMapTheme(themeKey) {
+  if (currentTileLayer && map.hasLayer(currentTileLayer)) {
+    map.removeLayer(currentTileLayer);
+  }
+  const theme = MAP_THEMES[themeKey] || MAP_THEMES["esri-dark"];
+  currentTileLayer = L.tileLayer(theme.url, theme.options).addTo(map);
+  currentTileLayer.bringToBack();
+}
+setMapTheme(userSettings.mapTheme);
 
 const targetIcon = L.divIcon({
   className: "",
@@ -364,6 +417,9 @@ function updateTripTrackingMarker(lat, lng) {
     `<b>Live location</b><br>${fmtCoord(lat)}, ${fmtCoord(lng)}`,
     { direction: "top", offset: [0, -8] }
   );
+  if (userSettings.autoCenter) {
+    map.panTo([lat, lng], { animate: true, duration: 0.6 });
+  }
 }
 
 function removeTripTrackingMarker() {
@@ -435,12 +491,17 @@ function updateTripEta() {
   if (!state.trip) return;
   const f = Math.min(Math.max(+$("tripFactorInput").value || 1, 0.1), 20);
   const mins = Math.max(1, Math.round(state.trip.duration_min / f));
-  $("tripEta").value = `~${mins >= 60 ? Math.floor(mins / 60) + "h " : ""}${mins % 60}m (${state.trip.distance_km} km)`;
+  const isImp = userSettings.units === "imperial";
+  const distVal = isImp ? (state.trip.distance_km * 0.621371).toFixed(1) : state.trip.distance_km;
+  const distUnit = isImp ? "mi" : "km";
+  const speedAvg = isImp ? Math.round(state.trip.speed_kmh * f * 0.621371) : Math.round(state.trip.speed_kmh * f);
+  const speedUnit = isImp ? "mph" : "km/h";
+  $("tripEta").value = `~${mins >= 60 ? Math.floor(mins / 60) + "h " : ""}${mins % 60}m (${distVal} ${distUnit})`;
   if (!$("tripSummary").classList.contains("hidden")) {
     const label = mins >= 60 ? `${Math.floor(mins / 60)}h ${mins % 60}m` : `${mins} min`;
     const viaText = state.trip.summary ? `<b>${state.trip.summary}</b> · ` : "";
     $("tripSummary").innerHTML =
-      `${viaText}<b>${state.trip.distance_km} km</b> · <b>${label}</b> (${(state.trip.speed_kmh * f).toFixed(0)} km/h avg)<br>` +
+      `${viaText}<b>${distVal} ${distUnit}</b> · <b>${label}</b> (${speedAvg} ${speedUnit} avg)<br>` +
       `<span class="muted small">${state.trip.dest_label || ""}</span>`;
   }
 }
@@ -579,9 +640,12 @@ function renderSession(s) {
   }
   const modeName = { fixed: "stay put", jitter: "roaming", custom: "drawn route", route: "itinerary" }[s.mode] || s.mode;
   let hudHtml = "";
-  if (s.mode === "route" && s.telemetry) {
+  if (s.mode === "route" && s.telemetry && userSettings.showHud !== false) {
     const t = s.telemetry;
-    const speedStr = t.completed ? "Arrived" : `${t.speed_kmh} km/h`;
+    const isImp = userSettings.units === "imperial";
+    const speedVal = isImp ? Math.round(t.speed_kmh * 0.621371) : t.speed_kmh;
+    const speedUnit = isImp ? "mph" : "km/h";
+    const speedStr = t.completed ? "Arrived" : `${speedVal} ${speedUnit}`;
     let remStr = "";
     if (t.completed) {
       remStr = "Holding destination";
@@ -917,17 +981,183 @@ if (logToggle && logWrapper) {
   });
 }
 
+/* ------------------------------------------------------------- settings UI */
+function initSettingsUI() {
+  const modal = $("settingsModal");
+  const btn = $("settingsBtn");
+  const closeBtn = $("closeSettingsBtn");
+  const saveBtn = $("saveSettingsBtn");
+  const resetBtn = $("resetSettingsBtn");
+
+  if (!modal || !btn) return;
+
+  function syncSettingsInputs() {
+    if ($("settingMapTheme")) $("settingMapTheme").value = userSettings.mapTheme;
+    if ($("settingAutoCenter")) $("settingAutoCenter").checked = !!userSettings.autoCenter;
+    if ($("settingShowHud")) $("settingShowHud").checked = !!userSettings.showHud;
+    if ($("settingDefaultRadius")) $("settingDefaultRadius").value = userSettings.defaultRadius;
+    if ($("settingDefaultRoamSpeed")) $("settingDefaultRoamSpeed").value = userSettings.defaultRoamSpeed;
+    if ($("settingDefaultTripFactor")) $("settingDefaultTripFactor").value = userSettings.defaultTripFactor;
+
+    document.querySelectorAll("#settingUnitsControl .seg-btn").forEach((b) => {
+      b.classList.toggle("on", b.dataset.val === userSettings.units);
+    });
+    document.querySelectorAll("#settingPollInterval .seg-btn").forEach((b) => {
+      b.classList.toggle("on", +b.dataset.val === userSettings.pollInterval);
+    });
+  }
+
+  function openSettings() {
+    syncSettingsInputs();
+    modal.classList.remove("hidden");
+  }
+
+  function closeSettings() {
+    modal.classList.add("hidden");
+    saveSettings();
+  }
+
+  btn.addEventListener("click", openSettings);
+  if (closeBtn) closeBtn.addEventListener("click", closeSettings);
+  if (saveBtn) saveBtn.addEventListener("click", closeSettings);
+
+  modal.addEventListener("click", (e) => {
+    if (e.target === modal) closeSettings();
+  });
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && !modal.classList.contains("hidden")) {
+      closeSettings();
+    }
+  });
+
+  // Settings tabs
+  document.querySelectorAll("#settingsTabButtons .settings-tab-btn").forEach((tabBtn) => {
+    tabBtn.addEventListener("click", () => {
+      document.querySelectorAll("#settingsTabButtons .settings-tab-btn").forEach((b) => b.classList.remove("on"));
+      tabBtn.classList.add("on");
+      const targetId = tabBtn.dataset.target;
+      document.querySelectorAll(".tab-content").forEach((tc) => {
+        tc.classList.toggle("hidden", tc.id !== targetId);
+      });
+    });
+  });
+
+  // Theme
+  if ($("settingMapTheme")) {
+    $("settingMapTheme").addEventListener("change", (e) => {
+      userSettings.mapTheme = e.target.value;
+      setMapTheme(userSettings.mapTheme);
+      saveSettings();
+    });
+  }
+
+  // Auto center
+  if ($("settingAutoCenter")) {
+    $("settingAutoCenter").addEventListener("change", (e) => {
+      userSettings.autoCenter = !!e.target.checked;
+      saveSettings();
+    });
+  }
+
+  // HUD
+  if ($("settingShowHud")) {
+    $("settingShowHud").addEventListener("change", (e) => {
+      userSettings.showHud = !!e.target.checked;
+      saveSettings();
+      if (state.session) renderSession(state.session);
+    });
+  }
+
+  // Units
+  document.querySelectorAll("#settingUnitsControl .seg-btn").forEach((b) => {
+    b.addEventListener("click", () => {
+      userSettings.units = b.dataset.val;
+      document.querySelectorAll("#settingUnitsControl .seg-btn").forEach((x) => x.classList.toggle("on", x === b));
+      saveSettings();
+      updateTripEta();
+      if (state.session) renderSession(state.session);
+    });
+  });
+
+  // Polling rate
+  document.querySelectorAll("#settingPollInterval .seg-btn").forEach((b) => {
+    b.addEventListener("click", () => {
+      userSettings.pollInterval = +b.dataset.val;
+      document.querySelectorAll("#settingPollInterval .seg-btn").forEach((x) => x.classList.toggle("on", x === b));
+      saveSettings();
+      schedulePoll();
+    });
+  });
+
+  // Default roam radius
+  if ($("settingDefaultRadius")) {
+    $("settingDefaultRadius").addEventListener("input", (e) => {
+      const val = Math.min(Math.max(+e.target.value || 120, 15), 2000);
+      userSettings.defaultRadius = val;
+      if ($("radiusInput")) $("radiusInput").value = val;
+      saveSettings();
+      redrawOverlays();
+    });
+  }
+
+  // Default roam speed
+  if ($("settingDefaultRoamSpeed")) {
+    $("settingDefaultRoamSpeed").addEventListener("input", (e) => {
+      const val = Math.min(Math.max(+e.target.value || 4.5, 0.5), 30);
+      userSettings.defaultRoamSpeed = val;
+      if ($("roamSpeedInput")) $("roamSpeedInput").value = val;
+      saveSettings();
+    });
+  }
+
+  // Default trip factor
+  if ($("settingDefaultTripFactor")) {
+    $("settingDefaultTripFactor").addEventListener("input", (e) => {
+      const val = Math.min(Math.max(+e.target.value || 1.0, 0.1), 20);
+      userSettings.defaultTripFactor = val;
+      if ($("tripFactorInput")) $("tripFactorInput").value = val;
+      saveSettings();
+      updateTripEta();
+    });
+  }
+
+  // Reset
+  if (resetBtn) {
+    resetBtn.addEventListener("click", () => {
+      userSettings = Object.assign({}, DEFAULT_SETTINGS);
+      saveSettings();
+      setMapTheme(userSettings.mapTheme);
+      if ($("radiusInput")) $("radiusInput").value = userSettings.defaultRadius;
+      if ($("roamSpeedInput")) $("roamSpeedInput").value = userSettings.defaultRoamSpeed;
+      if ($("tripFactorInput")) $("tripFactorInput").value = userSettings.defaultTripFactor;
+      syncSettingsInputs();
+      redrawOverlays();
+      updateTripEta();
+      if (state.session) renderSession(state.session);
+      schedulePoll();
+      toast("Preferences reset to defaults.", "ok");
+    });
+  }
+}
+
 /* ----------------------------------------------------------------- boot */
 let pollTimer = null;
 function schedulePoll() {
   clearTimeout(pollTimer);
-  const interval = (state.session && state.session.state === "active") ? 1000 : 2500;
+  const baseRate = userSettings.pollInterval || 1000;
+  const interval = (state.session && state.session.state === "active") ? baseRate : Math.max(baseRate * 2.5, 2000);
   pollTimer = setTimeout(async () => {
     await poll();
     schedulePoll();
   }, interval);
 }
 
+if ($("radiusInput") && userSettings.defaultRadius) $("radiusInput").value = userSettings.defaultRadius;
+if ($("roamSpeedInput") && userSettings.defaultRoamSpeed) $("roamSpeedInput").value = userSettings.defaultRoamSpeed;
+if ($("tripFactorInput") && userSettings.defaultTripFactor) $("tripFactorInput").value = userSettings.defaultTripFactor;
+
+initSettingsUI();
 syncCoordInputs();
 renderWaypoints();
 setMode("fixed");
