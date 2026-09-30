@@ -11,6 +11,7 @@ const state = {
   devices: [],
   selected: null,
   session: null,
+  activeTarget: null,       // current active spoof parameters
   pickMode: false,
 };
 
@@ -58,8 +59,12 @@ marker.on("drag", (e) => {
   const p = e.target.getLatLng();
   state.target = { lat: p.lat, lng: p.lng, place: "" };
   syncCoordInputs();
+  if (typeof updateControlButtons === "function") updateControlButtons();
 });
-marker.on("dragend", () => reverseGeocode());
+marker.on("dragend", async () => {
+  await reverseGeocode();
+  if (typeof updateControlButtons === "function") updateControlButtons();
+});
 
 map.on("click", (e) => {
   if (state.mode !== "custom") return;
@@ -167,6 +172,7 @@ function setTarget(lat, lng, place) {
   map.setView([lat, lng], Math.max(map.getZoom(), 10));
   redrawOverlays();
   if (place) $("placeLabel").textContent = place;
+  if (typeof updateControlButtons === "function") updateControlButtons();
 }
 
 /* ------------------------------------------------------------- mode tabs */
@@ -178,11 +184,18 @@ function setMode(mode) {
   $("customOpts").classList.toggle("hidden", mode !== "custom");
   $("tripOpts").classList.toggle("hidden", mode !== "trip");
   redrawOverlays();
+  if (typeof updateControlButtons === "function") updateControlButtons();
 }
 document.querySelectorAll("#modeChips .chip").forEach((c) =>
   c.addEventListener("click", () => setMode(c.dataset.mode)));
 
-$("radiusInput").addEventListener("change", redrawOverlays);
+$("radiusInput").addEventListener("change", () => {
+  redrawOverlays();
+  if (typeof updateControlButtons === "function") updateControlButtons();
+});
+$("roamSpeedInput").addEventListener("change", () => {
+  if (typeof updateControlButtons === "function") updateControlButtons();
+});
 
 /* --------------------------------------------------------- custom route */
 function renderWaypoints() {
@@ -196,6 +209,7 @@ function renderWaypoints() {
       renderWaypoints();
     }));
   redrawOverlays();
+  if (typeof updateControlButtons === "function") updateControlButtons();
 }
 $("clearWpsBtn").addEventListener("click", () => { state.waypoints = []; renderWaypoints(); });
 
@@ -245,7 +259,8 @@ async function planTrip() {
     redrawOverlays();
     updateTripEta();
     map.fitBounds(L.polyline(trip.waypoints).getBounds(), { padding: [40, 40] });
-    toast("Itinerary planned — press START SPOOFING.", "ok");
+    toast("Itinerary planned — press START SPOOFING or Auto Swap.", "ok");
+    if (typeof updateControlButtons === "function") updateControlButtons();
   } catch (e) {
     state.trip = null;
     $("tripSummary").innerHTML = `<span style="color:#ef4444">${e.message}</span>`;
@@ -372,6 +387,65 @@ async function enableDevMode(ev) {
   }
 }
 
+function hasTargetChanged() {
+  if (!state.session || state.session.state !== "active" || !state.activeTarget) {
+    return false;
+  }
+  const at = state.activeTarget;
+  if (state.mode !== at.mode) return true;
+
+  if (state.mode === "fixed" || state.mode === "jitter") {
+    const dLat = Math.abs((state.target.lat || 0) - (at.lat || 0));
+    const dLng = Math.abs((state.target.lng || 0) - (at.lng || 0));
+    if (dLat > 0.0001 || dLng > 0.0001) return true;
+    if (state.mode === "jitter") {
+      const curR = +$("radiusInput").value || 120;
+      const curS = +$("roamSpeedInput").value || 4.5;
+      if (curR !== at.radius_m || curS !== at.speed_kmh) return true;
+    }
+    return false;
+  }
+
+  if (state.mode === "custom") {
+    const curWps = state.waypoints || [];
+    const prevWps = at.waypoints || [];
+    if (curWps.length !== prevWps.length) return curWps.length >= 2;
+    for (let i = 0; i < curWps.length; i++) {
+      if (Math.abs(curWps[i][0] - prevWps[i][0]) > 0.0001 || Math.abs(curWps[i][1] - prevWps[i][1]) > 0.0001) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  if (state.mode === "trip") {
+    if (!state.trip) return false;
+    if (!at.trip) return true;
+    const curDest = state.trip.dest_label || "";
+    const prevDest = at.trip.dest_label || "";
+    if (curDest !== prevDest) return true;
+    const curWps = state.trip.waypoints || [];
+    const prevWps = at.trip.waypoints || [];
+    return curWps.length !== prevWps.length;
+  }
+
+  return false;
+}
+
+function updateControlButtons() {
+  const s = state.session;
+  const isActive = !!s && s.state !== "stopped" && s.state !== "failed";
+  $("startBtn").classList.toggle("hidden", isActive);
+  const activeControls = $("activeControls");
+  if (activeControls) activeControls.classList.toggle("hidden", !isActive);
+
+  const autoSwapBtn = $("autoSwapBtn");
+  if (autoSwapBtn) {
+    const showSwap = isActive && hasTargetChanged();
+    autoSwapBtn.classList.toggle("hidden", !showSwap);
+  }
+}
+
 /* --------------------------------------------------------------- status */
 let lastLogLen = 0;
 async function poll() {
@@ -384,11 +458,21 @@ async function poll() {
     $("devModeBtn").classList.toggle("hidden", !(selDev && selDev.platform === "ios"));
     const s = state.selected ? st.sessions.find((x) => x.device_id === state.selected) : st.sessions[0];
     state.session = s || null;
-    const isActive = !!s && s.state !== "stopped" && s.state !== "failed";
-    $("startBtn").classList.toggle("hidden", isActive);
-    const activeControls = $("activeControls");
-    if (activeControls) activeControls.classList.toggle("hidden", !isActive);
+
+    if (s && s.state === "active" && !state.activeTarget && s.last) {
+      state.activeTarget = {
+        mode: s.mode || "fixed",
+        lat: s.last[0],
+        lng: s.last[1],
+        place: s.place || "",
+      };
+    } else if (!s || s.state === "stopped" || s.state === "failed") {
+      state.activeTarget = null;
+    }
+
+    updateControlButtons();
     renderSession(s);
+
     if (st.logs.length !== lastLogLen) {
       lastLogLen = st.logs.length;
       const log = $("log");
@@ -451,7 +535,18 @@ $("startBtn").addEventListener("click", async () => {
   try {
     const body = buildPayload();
     await api("/api/start", body);
+    state.activeTarget = {
+      mode: body.mode,
+      lat: body.lat,
+      lng: body.lng,
+      place: body.place,
+      radius_m: body.radius_m,
+      speed_kmh: body.speed_kmh,
+      waypoints: body.waypoints ? JSON.parse(JSON.stringify(body.waypoints)) : null,
+      trip: state.trip ? JSON.parse(JSON.stringify(state.trip)) : null,
+    };
     toast("Spoofing started.", "ok");
+    updateControlButtons();
     poll();
   } catch (e) { toast(e.message, "error"); }
 });
@@ -462,7 +557,18 @@ if (autoSwapBtn) {
     try {
       const body = buildPayload();
       await api("/api/swap", body);
-      toast("⚡ Auto swapped location seamlessly (no GPS blink).", "ok");
+      state.activeTarget = {
+        mode: body.mode,
+        lat: body.lat,
+        lng: body.lng,
+        place: body.place,
+        radius_m: body.radius_m,
+        speed_kmh: body.speed_kmh,
+        waypoints: body.waypoints ? JSON.parse(JSON.stringify(body.waypoints)) : null,
+        trip: state.trip ? JSON.parse(JSON.stringify(state.trip)) : null,
+      };
+      toast("Location swapped seamlessly without delay.", "ok");
+      updateControlButtons();
       poll();
     } catch (e) { toast(e.message, "error"); }
   });
@@ -471,7 +577,9 @@ if (autoSwapBtn) {
 $("stopBtn").addEventListener("click", async () => {
   try {
     await api("/api/stop", { device_id: state.selected || (state.session && state.session.device_id) });
+    state.activeTarget = null;
     toast("Stopped — real GPS restored.", "ok");
+    updateControlButtons();
     poll();
   } catch (e) { toast(e.message, "error"); }
 });
