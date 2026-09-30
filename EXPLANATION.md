@@ -144,6 +144,9 @@ Tips: use Roam/Trip rather than a frozen pin, keep jumps physically possible, an
 | "ADB missing" pill | Press **Install ADB** (auto-downloads Google's tools) |
 | Android "unauthorized" | Unlock the phone, allow the USB-debugging prompt |
 | Map tiles blank | Tiles load from the internet; everything else works offline |
+| Windows blocks run_geox.bat ("Windows protected your PC") | SmartScreen reacting to the downloaded-file marker. Click **More info → Run anyway**, or right-click the downloaded zip → Properties → tick **Unblock** before extracting |
+| The .sh file does nothing on Windows | Normal: it is for macOS/Linux/Git Bash only. Windows users only need run_geox.bat |
+| "Python was not found" / Store window opens | The PC has the fake Microsoft Store Python stub. The launcher skips it automatically now; if you are on an old copy, re-download |
 | Something else | Read the Log panel; messages are written in plain language |
 
 ## 8. Responsible use & legal notes

@@ -55,6 +55,15 @@ geox server             # Start the browser UI
 The terminal window is the live connection to the phone, so keep it open.
 Pressing **Ctrl+C** (or the red **STOP** button in Web UI) restores the real GPS instantly.
 
+### If Windows blocks the file
+
+That's Windows SmartScreen reacting to the "downloaded from the internet" marker, not a virus. Two ways past it:
+
+- **Before extracting**: right-click the downloaded zip, choose **Properties**, tick **Unblock**, then extract. Nothing gets blocked afterwards.
+- **On first run**: when the blue "Windows protected your PC" screen appears, click **More info**, then **Run anyway**.
+
+The `run_geox.sh` file is only for macOS, Linux and Git Bash users. Windows users never need it, and double-clicking it on Windows does nothing, which is normal.
+
 ## Requirements
 
 | Platform | Needed once |
