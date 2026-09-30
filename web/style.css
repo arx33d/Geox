@@ -178,6 +178,14 @@ input:focus { border-color: var(--green-line); }
 input::placeholder { color: #5c5c64; }
 label.optlabel { font-size: 12px; color: var(--muted); display: block; margin-top: 8px; }
 
+/* keep paired label+input cells aligned and breathing */
+.optgrid { align-items: end; }
+.optgrid > div { display: flex; flex-direction: column; }
+.optgrid > div > .optlabel { margin-top: 0; margin-bottom: 6px; }
+.optgrid > div > input,
+.optgrid > div > select { margin-top: auto; }
+#tripEta { text-align: center; }
+
 /* ---------------------------------------------------------------- chips */
 .chips { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 10px; }
 .chip {
