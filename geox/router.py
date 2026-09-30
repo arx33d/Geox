@@ -39,15 +39,63 @@ def geocode_name(name):
     return float(data[0]["lat"]), float(data[0]["lon"]), data[0].get("display_name", name)
 
 
+PRESETS = {
+    "mcmurdo": (-77.8419, 166.6863, "McMurdo Station, Antarctica"),
+    "southpole": (-89.9975, 0.0, "South Pole Station"),
+    "vancouver": (49.2827, -123.1207, "Vancouver, Canada"),
+    "toronto": (43.6532, -79.3832, "Toronto, Canada"),
+    "newyork": (40.7128, -74.0060, "New York, USA"),
+    "nyc": (40.7128, -74.0060, "New York, USA"),
+    "paris": (48.8566, 2.3522, "Paris, France"),
+    "tokyo": (35.6762, 139.6503, "Tokyo, Japan"),
+    "london": (51.5072, -0.1276, "London, UK"),
+    "dubai": (25.2048, 55.2708, "Dubai, UAE"),
+    "sydney": (-33.8688, 151.2093, "Sydney, Australia"),
+    "honolulu": (21.3069, -157.8583, "Honolulu, Hawaii"),
+    "lasvegas": (36.1699, -115.1398, "Las Vegas, USA"),
+    "losangeles": (34.0522, -118.2437, "Los Angeles, USA"),
+    "la": (34.0522, -118.2437, "Los Angeles, USA"),
+    "sanfrancisco": (37.7749, -122.4194, "San Francisco, USA"),
+    "sf": (37.7749, -122.4194, "San Francisco, USA"),
+    "seattle": (47.6062, -122.3321, "Seattle, USA"),
+    "miami": (25.7617, -80.1918, "Miami, USA"),
+    "chicago": (41.8781, -87.6298, "Chicago, USA"),
+}
+
+
+def expand_gmaps_url(url):
+    """Follow redirects if the URL is a shortened Google Maps link."""
+    url = url.strip()
+    if not (url.startswith("http://") or url.startswith("https://")):
+        return url
+    if any(short in url.lower() for short in ("goo.gl", "maps.app.goo.gl", "page.link", "bit.ly")):
+        try:
+            r = requests.head(url, allow_redirects=True, timeout=10, headers=HEADERS)
+            return r.url
+        except Exception:
+            try:
+                r = requests.get(url, allow_redirects=True, timeout=10, headers=HEADERS)
+                return r.url
+            except Exception:
+                pass
+    return url
+
+
 def _coords_from_text(text):
     """Best-effort extraction of [lat, lng] pairs from any Google Maps URL."""
+    text = expand_gmaps_url(text)
     pairs = []
-    # !3dLAT!4dLNG (place pins inside /dir/ URLs)
+    # !3dLAT!4dLNG (place pins inside /dir/ URLs or search URLs)
     for m in re.finditer(r"!3d(-?\d+\.\d+)!4d(-?\d+\.\d+)", text):
         pairs.append((float(m.group(1)), float(m.group(2))))
     # @lat,lng (map view)
     if not pairs:
         m = re.search(r"@(-?\d+\.\d+),(-?\d+\.\d+)", text)
+        if m:
+            pairs.append((float(m.group(1)), float(m.group(2))))
+    # /search/LAT,LNG or /place/LAT,LNG
+    if not pairs:
+        m = re.search(r"/(?:search|place)/(-?\d+\.\d+)\s*,\s*(-?\d+\.\d+)", text)
         if m:
             pairs.append((float(m.group(1)), float(m.group(2))))
     # origin= / destination= params — names or "lat,lng"
@@ -72,6 +120,47 @@ def _coords_from_text(text):
                     lat, lng, _ = geocode_name(name)
                     pairs.append((lat, lng))
     return pairs
+
+
+def resolve_location_input(raw):
+    """Resolve a raw location input (Google Maps URL, preset, coords, or search text).
+
+    Returns:
+        (lat: float, lng: float, label: str)
+    """
+    if not raw or not str(raw).strip():
+        raise ValueError("Location cannot be empty.")
+    text = str(raw).strip()
+
+    # 1. Preset lookup (normalized)
+    norm = re.sub(r"[^a-zA-Z0-9]", "", text).lower()
+    if norm in PRESETS:
+        lat, lng, label = PRESETS[norm]
+        return lat, lng, label
+
+    # 2. Check if it's a URL or contains Google Maps pattern
+    if "http" in text.lower() or "maps" in text.lower() or "!3d" in text or "@" in text:
+        pairs = _coords_from_text(text)
+        if pairs:
+            lat, lng = pairs[-1]
+            # Try to extract a clean label from the place name in URL if present
+            label = f"{lat:.5f}, {lng:.5f}"
+            place_match = re.search(r"/place/([^/@]+)", text)
+            if place_match:
+                cleaned = requests.utils.unquote(place_match.group(1)).replace("+", " ")
+                label = f"{cleaned} ({lat:.5f}, {lng:.5f})"
+            return lat, lng, label
+
+    # 3. Direct numeric coordinates: "43.6548, -79.3884" or "43.6548 -79.3884"
+    m = re.match(r"^([+-]?\d+(?:\.\d+)?)\s*[,;\s]\s*([+-]?\d+(?:\.\d+)?)$", text)
+    if m:
+        lat, lng = float(m.group(1)), float(m.group(2))
+        if not (-90 <= lat <= 90) or not (-180 <= lng <= 180):
+            raise ValueError(f"Coordinates out of bounds: lat={lat}, lng={lng}")
+        return lat, lng, f"{lat:.5f}, {lng:.5f}"
+
+    # 4. Search via Nominatim geocoding
+    return geocode_name(text)
 
 
 def _param(text, key):

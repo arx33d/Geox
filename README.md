@@ -20,6 +20,7 @@ You are in Vancouver. Everyone checking your location sees you at McMurdo Statio
 
 ## Quick start
 
+### Option A: Web UI
 ```
 1. Double-click  run_geox.bat          (or run ./run_geox.sh)
 2. The browser opens http://127.0.0.1:7876
@@ -28,8 +29,31 @@ You are in Vancouver. Everyone checking your location sees you at McMurdo Statio
 5. Pick a destination, choose a movement mode, press START SPOOFING
 ```
 
+### Option B: Command Line (CLI)
+You can run Geox directly from your terminal or command prompt (`cmd.exe`, PowerShell, or bash):
+
+```bat
+# Spoof location with a Google Maps URL (Stay mode):
+geox --location "https://www.google.com/maps/place/Toronto,+ON/@43.7164673,-79.6563003,..." --movement stay
+
+# Spoof location with Roam mode (radius 120m, speed 4.5 km/h):
+geox --location "Toronto, ON" --movement roam 120 4.5
+
+# Spoof directly using presets:
+geox --preset mcmurdo --movement roam 200 5
+
+# Plan and drive a realistic trip:
+geox --from "Vancouver" --to "Seattle" --profile car --speed-factor 1.5
+
+# Device management and controls:
+geox --devices          # List connected phones
+geox --stop             # Stop spoofing & restore real GPS
+geox --status           # Check active spoofing sessions
+geox server             # Start the browser UI
+```
+
 The terminal window is the live connection to the phone, so keep it open.
-The red **STOP** button (or closing the window) restores the real GPS instantly.
+Pressing **Ctrl+C** (or the red **STOP** button in Web UI) restores the real GPS instantly.
 
 ## Requirements
 

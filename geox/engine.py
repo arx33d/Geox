@@ -10,6 +10,18 @@ from . import android_backend, ios_backend
 SCAN_THROTTLE = 1.5
 
 
+import sys
+
+if sys.platform == "win32":
+    try:
+        if hasattr(sys.stdout, "reconfigure"):
+            sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        if hasattr(sys.stderr, "reconfigure"):
+            sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
+
 def _apple_service_installed():
     import os
 
@@ -46,7 +58,14 @@ class Engine:
                 return
             self._last_shown[key] = now
             self.logs.append({"t": now, "level": level, "msg": msg})
-        print(f"[{level}] {msg}", flush=True)
+        try:
+            print(f"[{level}] {msg}", flush=True)
+        except Exception:
+            try:
+                safe_msg = str(msg).encode("ascii", errors="replace").decode("ascii")
+                print(f"[{level}] {safe_msg}", flush=True)
+            except Exception:
+                pass
 
     # --------------------------------------------------------------- devices
     def scan_devices(self):

@@ -15,9 +15,31 @@ Read the "Responsible use" section at the bottom before using this. It runs on y
 6. Choose a movement mode  →  press  START SPOOFING
 ```
 
-`run_geox.bat` needs nothing pre-installed: if Python is missing it downloads a private copy (about 11 MB) plus the app's dependencies automatically. To share Geox with someone, zip this folder and send it; the first run sets everything up (internet required).
+### CLI Mode (direct terminal usage)
+You can also run Geox directly from your command line without opening a browser:
 
-Keep the terminal window open: it *is* the connection to the phone. Close it (or press the red STOP button) and the phone's real GPS comes back.
+```bat
+# Spoof location with a Google Maps URL (Stay mode):
+geox --location "https://www.google.com/maps/place/Toronto,+ON/@43.7164673,-79.6563003,..." --movement stay
+
+# Spoof location with Roam mode (radius 120m, speed 4.5 km/h):
+geox --location "Toronto, ON" --movement roam 120 4.5
+
+# Spoof using quick presets:
+geox --preset mcmurdo --movement roam 200 5
+
+# Plan and drive a realistic trip:
+geox --from "Vancouver" --to "Seattle" --profile car --speed-factor 1.5
+
+# Manage devices and sessions:
+geox --devices          # List connected phones and status
+geox --stop             # Stop spoofing & restore real GPS
+geox --status           # Check active spoofing sessions
+```
+
+`run_geox.bat` and `geox.bat` need nothing pre-installed: if Python is missing it downloads a private copy (about 11 MB) plus the app's dependencies automatically. To share Geox with someone, zip this folder and send it; the first run sets everything up (internet required).
+
+Keep the terminal window open: it *is* the connection to the phone. Pressing **Ctrl+C** (or the red STOP button) restores the real GPS immediately.
 
 ## 2. One-time setup
 
