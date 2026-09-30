@@ -35,6 +35,8 @@ USBMUX_PORT = 27015
 _last_service_check = 0.0
 _last_usb_probe = 0.0
 _last_usb_probe_result = False
+_IOS_DETAILS: dict = {}
+_IOS_DETAILS_TTL = 10.0
 
 
 class IosError(Exception):
@@ -286,6 +288,12 @@ async def _scan(engine):
             "tunnel_mode": False,
             "notes": [],
         }
+        # lockdown round-trips are slow; reuse details for a few scans
+        cached = _IOS_DETAILS.get(mux.serial)
+        if cached and time.time() - cached[0] < _IOS_DETAILS_TTL:
+            info.update(cached[1])
+            devices.append(info)
+            continue
         try:
             lockdown = await create_using_usbmux(serial=mux.serial, autopair=False)
         except NoDeviceConnectedError:
@@ -311,6 +319,10 @@ async def _scan(engine):
             pass
         if _version_tuple(info["os_version"] or "0") >= (17,):
             info["tunnel_mode"] = True
+        _IOS_DETAILS[mux.serial] = (
+            time.time(),
+            {k: info[k] for k in ("name", "os_version", "paired", "developer_mode", "tunnel_mode")},
+        )
         devices.append(info)
     return devices
 
@@ -599,21 +611,40 @@ class IosCliSession:
         if self.motion is None:
             self.motion = build_motion(self.cfg)
         motion = self.motion
-        t0 = _dt.datetime.now(_dt.timezone.utc).replace(microsecond=0)
-        with open(path, "w", encoding="utf-8") as f:
+        base = int(time.time())
+        # ~4x faster than datetime/timedelta formatting per point
+        fmt = time.strftime
+        gmtime = time.gmtime
+        points = []
+        append = points.append
+        for i in range(PLAYBACK_HOURS * 3600):
+            lat, lng = motion.step(1.0)
+            append(
+                f'<trkpt lat="{lat:.7f}" lon="{lng:.7f}">'
+                f"<time>{fmt('%Y-%m-%dT%H:%M:%SZ', gmtime(base + i))}</time>\n"
+            )
+        with open(path, "w", encoding="utf-8", newline="\n") as f:
             f.write(
                 '<?xml version="1.0" encoding="UTF-8"?>\n'
                 '<gpx version="1.1" creator="Geox" xmlns="http://www.topografix.com/GPX/1/1">\n'
                 "<trk><trkseg>\n"
             )
-            for i in range(PLAYBACK_HOURS * 3600):
-                lat, lng = motion.step(1.0)
-                ts = (t0 + _dt.timedelta(seconds=i)).strftime("%Y-%m-%dT%H:%M:%SZ")
-                f.write(
-                    f'<trkpt lat="{lat:.7f}" lon="{lng:.7f}"><time>{ts}</time></trkpt>\n'
-                )
+            f.write("".join(points))
             f.write("</trkseg></trk>\n</gpx>\n")
         self.last = motion.step(0)
+        self._prune_gpx_files()
+
+    @staticmethod
+    def _prune_gpx_files(keep=8):
+        """AutoSwap and reconnects spawn a track per swap; keep the newest."""
+        try:
+            files = sorted(
+                GPX_DIR.glob("track-*.gpx"), key=lambda p: p.stat().st_mtime, reverse=True
+            )
+            for old in files[keep:]:
+                old.unlink(missing_ok=True)
+        except Exception:
+            pass
 
     def _launch(self, gpx=None, point=None):
         cmd = pmd3_command() + ["developer", "dvt", "simulate-location"]

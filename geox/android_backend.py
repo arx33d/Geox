@@ -37,17 +37,29 @@ class AndroidError(Exception):
     """User-actionable Android failure."""
 
 
+_ADB_PATH: str | None = None
+_ADB_RESOLVED = False
+_ANDROID_DETAILS: dict = {}
+_ANDROID_DETAILS_TTL = 10.0
+
+
 def resolve_adb():
+    global _ADB_PATH, _ADB_RESOLVED
+    if _ADB_RESOLVED:
+        return _ADB_PATH or None
+    _ADB_RESOLVED = True
     bundled = TOOLS_DIR / "platform-tools" / ("adb.exe" if os.name == "nt" else "adb")
     if bundled.exists():
-        return str(bundled)
+        _ADB_PATH = str(bundled)
+        return _ADB_PATH
     for candidate in ("adb", "adb.exe"):
         found = subprocess.run(
             ["where", candidate] if os.name == "nt" else ["which", candidate],
             capture_output=True, text=True, encoding="utf-8", errors="replace",
         )
         if found.returncode == 0 and found.stdout.strip():
-            return found.stdout.strip().splitlines()[0]
+            _ADB_PATH = found.stdout.strip().splitlines()[0]
+            return _ADB_PATH
     return None
 
 
@@ -66,6 +78,8 @@ def install_adb(engine):
             with zipfile.ZipFile(zip_path) as z:
                 z.extractall(TOOLS_DIR)
             zip_path.unlink(missing_ok=True)
+            global _ADB_PATH, _ADB_RESOLVED
+            _ADB_PATH, _ADB_RESOLVED = None, False
             engine.log("[Android] platform-tools installed — ADB ready.", "good")
         except Exception as e:
             engine.log(f"[Android] ADB download failed: {e}", "error")
@@ -149,6 +163,12 @@ def list_devices(engine):
             info["notes"].append("Device shows offline — replug the cable")
             devices.append(info)
             continue
+        # adb shell round-trips are slow; reuse details for a few scans
+        cached = _ANDROID_DETAILS.get(device_id)
+        if cached and time.time() - cached[0] < _ANDROID_DETAILS_TTL:
+            info.update(cached[1])
+            devices.append(info)
+            continue
         try:
             model = _shell(engine, device_id, ["getprop", "ro.product.model"], timeout=10)
             ver = _shell(engine, device_id, ["getprop", "ro.build.version.release"], timeout=10)
@@ -167,6 +187,10 @@ def list_devices(engine):
                 info["notes"].append("Ready")
         except Exception as e:
             info["notes"].append(f"Bridge check failed: {e}")
+        _ANDROID_DETAILS[device_id] = (
+            time.time(),
+            {k: info[k] for k in ("name", "os_version", "bridge")},
+        )
         devices.append(info)
     return devices
 

@@ -208,6 +208,16 @@ class Engine:
 
     # --------------------------------------------------------------- status
     def capabilities(self):
+        now = time.time()
+        if getattr(self, "_caps_cache", None) and now - self._caps_cache[0] < 5:
+            caps = dict(self._caps_cache[1])
+            caps["adb_install_running"] = self.adb_install_running
+            return caps
+        caps = self._compute_capabilities()
+        self._caps_cache = (now, caps)
+        return caps
+
+    def _compute_capabilities(self):
         adb = android_backend.resolve_adb()
         from .ios_backend import _usbmux_up
 
