@@ -209,6 +209,23 @@ class TestOfflineCapabilities(unittest.TestCase):
         self.assertTrue(route["distance_km"] > 0)
         self.assertTrue(route["duration_min"] > 0)
 
+    def test_offline_road_corridor_montreal_toronto(self):
+        from geox.router import _offline_plan_route
+        route = _offline_plan_route((45.5017, -73.5673), (43.6532, -79.3832), "car")
+        self.assertTrue(route.get("offline"))
+        self.assertTrue(route.get("road_routed"))
+        self.assertTrue(route["distance_km"] > 500)
+        self.assertTrue(len(route["waypoints"]) > 1000)
+        self.assertIn("Offline Road Graph", route["summary"])
+
+    def test_offline_road_subsegment_kingston_toronto(self):
+        from geox.router import _offline_plan_route
+        route = _offline_plan_route((44.2312, -76.4860), (43.6532, -79.3832), "car")
+        self.assertTrue(route.get("offline"))
+        self.assertTrue(route.get("road_routed"))
+        self.assertTrue(240 < route["distance_km"] < 300)
+        self.assertTrue(len(route["waypoints"]) > 500)
+
     def test_offline_status_api(self):
         res = self.client.get("/api/offline/status")
         self.assertEqual(res.status_code, 200)

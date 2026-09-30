@@ -765,8 +765,16 @@ function updateTripEta() {
   if (!$("tripSummary").classList.contains("hidden")) {
     const label = mins >= 60 ? `${Math.floor(mins / 60)}h ${mins % 60}m` : `${mins} min`;
     const viaText = state.trip.summary ? `<b>${state.trip.summary}</b> · ` : "";
+    let offlineBadge = "";
+    if (state.trip.offline) {
+      if (state.trip.road_routed) {
+        offlineBadge = ` <span class="badge ok">ROAD GRAPH</span>`;
+      } else {
+        offlineBadge = ` <span class="badge warn">BEELINE (NO ROAD GRAPH)</span>`;
+      }
+    }
     $("tripSummary").innerHTML =
-      `${viaText}<b>${distVal} ${distUnit}</b> · <b>${label}</b> (${speedAvg} ${speedUnit} avg)<br>` +
+      `${viaText}<b>${distVal} ${distUnit}</b> · <b>${label}</b> (${speedAvg} ${speedUnit} avg)${offlineBadge}<br>` +
       `<span class="muted small">${state.trip.dest_label || ""}</span>`;
   }
 }
@@ -1696,7 +1704,8 @@ function initSettingsUI() {
         $("offlineStorageBadge").textContent = `${res.size_formatted} used${freeText}`;
       }
       if ($("offlineTileCountText")) {
-        $("offlineTileCountText").textContent = `Cached tiles: ${res.tile_count.toLocaleString()}`;
+        const packText = res.routing_packs_count ? ` · ${res.routing_packs_count} road pack(s)` : "";
+        $("offlineTileCountText").textContent = `Cached tiles: ${res.tile_count.toLocaleString()}${packText}`;
       }
       if ($("offlineDiskLeftText")) {
         $("offlineDiskLeftText").textContent = `Disk available: ${res.disk_free_formatted || "--"}`;

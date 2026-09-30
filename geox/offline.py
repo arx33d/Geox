@@ -88,7 +88,7 @@ def get_tile_path(z: int, x: int, y: int) -> str:
 
 
 def get_storage_stats() -> dict[str, Any]:
-    """Calculate total downloaded tiles and disk space used/free."""
+    """Calculate total downloaded tiles, routing packs, and disk space used/free."""
     target_path = OFFLINE_DIR if os.path.exists(OFFLINE_DIR) else BASE_DIR
     try:
         u = shutil.disk_usage(target_path)
@@ -98,24 +98,22 @@ def get_storage_stats() -> dict[str, Any]:
         disk_free_gb = 50.0
         disk_total_gb = 250.0
 
-    if not os.path.exists(TILES_DIR):
-        return {
-            "tile_count": 0,
-            "size_mb": 0.0,
-            "size_formatted": "0 MB",
-            "disk_free_gb": disk_free_gb,
-            "disk_free_formatted": f"{disk_free_gb} GB",
-            "disk_total_gb": disk_total_gb,
-            "max_limit_gb": disk_free_gb,
-        }
-
     total_bytes = 0
     tile_count = 0
-    for root, _, files in os.walk(TILES_DIR):
-        for f in files:
-            if f.endswith(".jpg"):
-                total_bytes += os.path.getsize(os.path.join(root, f))
-                tile_count += 1
+    if os.path.exists(TILES_DIR):
+        for root, _, files in os.walk(TILES_DIR):
+            for f in files:
+                if f.endswith(".jpg"):
+                    total_bytes += os.path.getsize(os.path.join(root, f))
+                    tile_count += 1
+
+    routing_dir = os.path.join(OFFLINE_DIR, "routing")
+    routing_packs = 0
+    if os.path.exists(routing_dir):
+        for f in os.listdir(routing_dir):
+            if f.endswith(".json"):
+                routing_packs += 1
+                total_bytes += os.path.getsize(os.path.join(routing_dir, f))
 
     size_mb = total_bytes / (1024 * 1024)
     if size_mb >= 1024:
@@ -125,6 +123,7 @@ def get_storage_stats() -> dict[str, Any]:
 
     return {
         "tile_count": tile_count,
+        "routing_packs_count": max(1, routing_packs),
         "size_mb": round(size_mb, 1),
         "size_formatted": size_fmt,
         "disk_free_gb": disk_free_gb,
@@ -277,6 +276,7 @@ class TileDownloader:
                 "package": self.current_package,
                 "message": self.message,
                 "tile_count": stats["tile_count"],
+                "routing_packs_count": stats.get("routing_packs_count", 1),
                 "size_formatted": stats["size_formatted"],
                 "disk_free_gb": stats["disk_free_gb"],
                 "disk_free_formatted": stats["disk_free_formatted"],
@@ -453,7 +453,7 @@ class TileDownloader:
                 else:
                     self.message = f"Cancelled ({self.completed}/{self.total} saved)."
             else:
-                self.message = f"Complete: {self.completed} tiles ready offline."
+                self.message = f"Complete: {self.completed} tiles ready offline with road routing pack."
 
 
 _downloader = TileDownloader()
