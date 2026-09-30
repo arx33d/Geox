@@ -35,5 +35,5 @@ Remove-Item $getpip
 Write-Host "Downloading Geox dependencies..."
 $py = Join-Path $dst "python.exe"
 & $py -m pip install --quiet --no-warn-script-location setuptools wheel
-& $py -m pip install --quiet --no-warn-script-location -r (Join-Path $root "requirements.txt")
+# requirements are installed with a progress bar by geox\first_run.py
 Write-Host "Setup complete."
