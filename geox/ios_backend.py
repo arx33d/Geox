@@ -377,7 +377,14 @@ class IosSession:
         self.stop_event = threading.Event()
         self.state = "connecting"
         self.error = None
-        self.last = (float(cfg["lat"]), float(cfg["lng"]))
+        start_pt = (
+            (float(cfg["lat"]), float(cfg["lng"]))
+            if "lat" in cfg and "lng" in cfg
+            else (float(cfg["waypoints"][0][0]), float(cfg["waypoints"][0][1]))
+            if cfg.get("waypoints")
+            else (0.0, 0.0)
+        )
+        self.last = start_pt
         self.started_at = time.time()
         self.motion = None
         self.thread = threading.Thread(target=self._run, daemon=True)
@@ -391,8 +398,11 @@ class IosSession:
         self.motion = build_motion(cfg)
         if "lat" in cfg and "lng" in cfg:
             self.last = (float(cfg["lat"]), float(cfg["lng"]))
+        elif cfg.get("waypoints"):
+            self.last = (float(cfg["waypoints"][0][0]), float(cfg["waypoints"][0][1]))
+        place_str = f"{self.cfg['place']} " if self.cfg.get("place") else ""
         self.engine.log(
-            f"[iOS] AUTO SWAP -> {self.cfg.get('place') or ''} "
+            f"[iOS] AUTO SWAP -> {place_str}"
             f"{self.last[0]:.5f}, {self.last[1]:.5f} (seamless transition)",
             "good",
         )
@@ -401,6 +411,15 @@ class IosSession:
         self.stop_event.set()
 
     def snapshot(self):
+        telemetry = None
+        motion_obj = getattr(self, "motion", None)
+        if self.state == "active" and self.cfg.get("mode") == "route" and motion_obj:
+            telemetry = {
+                "progress": getattr(motion_obj, "progress", 0.0),
+                "speed_kmh": getattr(motion_obj, "speed_kmh", 0.0),
+                "remaining_s": getattr(motion_obj, "remaining_s", None),
+                "completed": getattr(motion_obj, "completed", False),
+            }
         return {
             "device_id": self.device["id"],
             "device_name": self.device.get("name") or "iPhone",
@@ -412,6 +431,7 @@ class IosSession:
             "error": self.error,
             "started_at": self.started_at,
             "last": list(self.last),
+            "telemetry": telemetry,
         }
 
     def _fail(self, e):
@@ -455,6 +475,7 @@ class IosSession:
                 f"[iOS] spoofing ON → {self.cfg.get('place') or ''}"
                 f"{self.last[0]:.5f}, {self.last[1]:.5f}"
             )
+            await sim.set(*self.last)
             prev = time.time()
             while not self.stop_event.is_set():
                 await asyncio.sleep(0.2)
@@ -485,10 +506,14 @@ class IosCliSession:
         self.stop_event = threading.Event()
         self.state = "connecting"
         self.error = None
-        self.last = (
-            float(cfg.get("lat", 0)),
-            float(cfg.get("lng", 0)),
+        start_pt = (
+            (float(cfg["lat"]), float(cfg["lng"]))
+            if "lat" in cfg and "lng" in cfg
+            else (float(cfg["waypoints"][0][0]), float(cfg["waypoints"][0][1]))
+            if cfg.get("waypoints")
+            else (0.0, 0.0)
         )
+        self.last = start_pt
         self.started_at = time.time()
         self.proc = None
         self._out = []
@@ -497,6 +522,8 @@ class IosCliSession:
         self.superseded = False  # an AutoSwap replacement took over; don't reconnect
         self.thread = threading.Thread(target=self._run, daemon=True)
         self._current_gpx_path = None
+        self.motion_tracker = None
+        self._last_step_time = time.time()
 
     def _kill_tree(self, proc):
         """Kill a CLI process and its python worker children.
@@ -543,6 +570,11 @@ class IosCliSession:
             self.motion = build_motion(cfg)
             if "lat" in cfg and "lng" in cfg:
                 self.last = (float(cfg["lat"]), float(cfg["lng"]))
+            elif cfg.get("waypoints"):
+                self.last = (float(cfg["waypoints"][0][0]), float(cfg["waypoints"][0][1]))
+            if self.cfg.get("mode") == "route":
+                self.motion_tracker = build_motion(self.cfg)
+                self._last_step_time = time.time()
             path = self._gpx_path(f"track-{int(time.time() * 1000)}.gpx")
             self._write_gpx(path)
             self._current_gpx_path = path
@@ -582,8 +614,9 @@ class IosCliSession:
             self._out = buf
             self._kill_others(new_proc)
             self.state = "active"
+            place_str = f"{self.cfg['place']} " if self.cfg.get("place") else ""
             self.engine.log(
-                f"[iOS17] AUTO SWAP -> {self.cfg.get('place') or ''} "
+                f"[iOS17] AUTO SWAP -> {place_str}"
                 f"{self.last[0]:.5f}, {self.last[1]:.5f} (seamless, real GPS never shown)",
                 "good",
             )
@@ -597,6 +630,23 @@ class IosCliSession:
             self._kill_tree(p)
 
     def snapshot(self):
+        last = list(self.last)
+        telemetry = None
+        if self.state == "active" and self.cfg.get("mode") == "route" and getattr(self, "motion_tracker", None):
+            now = time.time()
+            dt = max(0.0, now - self._last_step_time)
+            if dt > 0:
+                self._last_step_time = now
+                pt = self.motion_tracker.step(dt)
+                self.last = (pt[0], pt[1])
+                last = list(self.last)
+            mt = self.motion_tracker
+            telemetry = {
+                "progress": getattr(mt, "progress", 0.0),
+                "speed_kmh": getattr(mt, "speed_kmh", 0.0),
+                "remaining_s": getattr(mt, "remaining_s", None),
+                "completed": getattr(mt, "completed", False),
+            }
         return {
             "device_id": self.device["id"],
             "device_name": self.device.get("name") or "iPhone",
@@ -607,8 +657,11 @@ class IosCliSession:
             "state": self.state,
             "error": self.error,
             "started_at": self.started_at,
-            "last": list(self.last),
+            "last": last,
+            "telemetry": telemetry,
         }
+
+    _LOC_RE = re.compile(r"set location to\s+([+-]?\d+(?:\.\d+)?)\s+([+-]?\d+(?:\.\d+)?)", re.IGNORECASE)
 
     def _pump(self, proc, buf=None):
         out = buf if buf is not None else self._out
@@ -616,6 +669,13 @@ class IosCliSession:
             line = line.strip()
             if line:
                 out.append(line)
+                m = self._LOC_RE.search(line)
+                if m:
+                    try:
+                        self.last = (float(m.group(1)), float(m.group(2)))
+                        self._last_step_time = time.time()
+                    except Exception:
+                        pass
                 if "error" in line.lower() or "warning" in line.lower():
                     self.engine.log(f"[iOS17] {line[:220]}", "debug")
 
@@ -637,19 +697,31 @@ class IosCliSession:
         return GPX_DIR / name
 
     def _write_gpx(self, path):
-        # self.motion persists across reconnects so routes continue from
-        # where they left off instead of teleporting back to the start
-        if self.motion is None:
-            self.motion = build_motion(self.cfg)
-        motion = self.motion
+        gen = build_motion(self.cfg)
+        start_pt = gen.step(0.0)
+        self.last = start_pt
         base = int(time.time())
+
+        # Configurable GPX duration: user choice or route travel time + hold buffer
+        user_hours = float(self.cfg.get("playback_hours", self.cfg.get("duration_hours", 0)))
+        if user_hours > 0:
+            total_seconds = int(user_hours * 3600)
+        elif self.cfg.get("mode") == "route" and getattr(gen, "total_t", None):
+            total_seconds = max(1800, int(gen.total_t + 3600))
+        else:
+            total_seconds = PLAYBACK_HOURS * 3600
+
         # ~4x faster than datetime/timedelta formatting per point
         fmt = time.strftime
         gmtime = time.gmtime
         points = []
         append = points.append
-        for i in range(PLAYBACK_HOURS * 3600):
-            lat, lng = motion.step(1.0)
+        append(
+            f'<trkpt lat="{start_pt[0]:.7f}" lon="{start_pt[1]:.7f}">'
+            f"<time>{fmt('%Y-%m-%dT%H:%M:%SZ', gmtime(base))}</time></trkpt>\n"
+        )
+        for i in range(1, total_seconds):
+            lat, lng = gen.step(1.0)
             append(
                 f'<trkpt lat="{lat:.7f}" lon="{lng:.7f}">'
                 f"<time>{fmt('%Y-%m-%dT%H:%M:%SZ', gmtime(base + i))}</time></trkpt>\n"
@@ -662,7 +734,7 @@ class IosCliSession:
             )
             f.write("".join(points))
             f.write("</trkseg></trk>\n</gpx>\n")
-        self.last = motion.step(0)
+        self.last = start_pt
         self._prune_gpx_files()
 
     @staticmethod
@@ -678,11 +750,16 @@ class IosCliSession:
             pass
 
     def _launch(self, gpx=None, point=None):
-        cmd = pmd3_command() + ["developer", "dvt", "simulate-location"]
+        cmd = pmd3_command() + ["-v", "developer", "dvt", "simulate-location"]
         if point is not None:
             cmd += ["set", "--", f"{point[0]:.6f}", f"{point[1]:.6f}"]
         else:
             cmd += ["play", str(gpx)]
+        if self.cfg.get("mode") == "route":
+            self.motion_tracker = build_motion(self.cfg)
+            self._last_step_time = time.time()
+        env = dict(os.environ)
+        env["PYTHONUNBUFFERED"] = "1"
         # stdin stays open so the CLI's "Press ENTER to exit" wait blocks
         # instead of reading EOF and aborting the session
         return self._track_proc(subprocess.Popen(
@@ -693,6 +770,7 @@ class IosCliSession:
             text=True,
             encoding="utf-8",
             errors="replace",
+            env=env,
             creationflags=CREATE_NO_WINDOW,
         ))
 
@@ -747,8 +825,9 @@ class IosCliSession:
             self._current_gpx_path = self._gpx_path(f"track-{int(time.time() * 1000)}.gpx")
             self._write_gpx(self._current_gpx_path)
         self.state = "active"
+        place_str = f"{self.cfg['place']} " if self.cfg.get("place") else ""
         on_msg = (
-            f"[iOS17] spoofing ON → {self.cfg.get('place') or ''}"
+            f"[iOS17] spoofing ON → {place_str}"
             f"{self.last[0]:.5f}, {self.last[1]:.5f} (re-asserted every second)"
         )
         self.engine.log(on_msg, "good")

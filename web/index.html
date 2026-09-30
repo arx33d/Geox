@@ -9,8 +9,10 @@
 </head>
 <body>
 <header>
-  <div class="logo">GEOX</div>
-  <span class="tag">spoof the GPS of a phone connected to this PC</span>
+  <div class="logo-wrap">
+    <div class="logo">GEOX</div>
+    <span class="tag">GPS Simulator & Route Controller</span>
+  </div>
   <span class="spacer"></span>
   <div class="pills" id="capPills"></div>
 </header>
@@ -18,123 +20,193 @@
 <main>
   <aside id="panel">
 
+    <!-- Step 1: Device -->
     <section class="card">
-      <h2><span class="step">1</span> Device</h2>
+      <div class="card-head">
+        <div class="card-title">
+          <span class="step-num">1</span>
+          <span>Target Device</span>
+        </div>
+      </div>
       <div id="deviceList" class="devlist"><div class="empty">Scanning for phones…</div></div>
-      <div class="row">
-        <button id="refreshBtn" class="btn ghost small">Refresh devices</button>
-        <button id="installAdbBtn" class="btn ghost small hidden">Install ADB</button>
-        <button id="devModeBtn" class="btn ghost small hidden">Enable dev mode</button>
+      <div class="row btn-row" style="margin-top:12px;">
+        <button id="refreshBtn" class="btn small ghost">↻ Refresh</button>
+        <button id="installAdbBtn" class="btn small ghost hidden">Install ADB</button>
+        <button id="devModeBtn" class="btn small ghost hidden">Enable Dev Mode</button>
       </div>
     </section>
 
+    <!-- Step 2: Destination -->
     <section class="card">
-      <h2><span class="step">2</span> <span id="destHeadingText">Destination</span></h2>
-      <div class="row" style="margin-top:0">
-        <input id="searchInput" type="text" placeholder="Search a place — e.g. McMurdo Station">
-        <button id="searchBtn" class="btn small" style="flex:0 0 auto">Go</button>
+      <div class="card-head">
+        <div class="card-title">
+          <span class="step-num">2</span>
+          <span id="destHeadingText">Destination</span>
+        </div>
+      </div>
+
+      <div class="search-box">
+        <input id="searchInput" type="text" placeholder="Search address, landmark, coordinates…">
+        <button id="searchBtn" class="btn-inside">Go</button>
       </div>
       <div id="searchResults" class="results hidden"></div>
-      <div class="row">
-        <button id="liveLocBtn" class="btn ghost small hidden">Use my live location</button>
+
+      <div class="row" style="margin-top:10px;">
+        <select id="presetSelect" class="btn-select">
+          <option value="" disabled selected>⚡ Quick presets (Vancouver, Tokyo, Paris…)</option>
+        </select>
+        <button id="liveLocBtn" class="btn small ghost hidden" style="flex:0 0 auto;" title="Use my real live location">📍 My Location</button>
       </div>
-      <div id="presets" class="chips"></div>
-      <div class="row coords">
-        <input id="latInput" type="number" step="0.00001" placeholder="Latitude">
-        <input id="lngInput" type="number" step="0.00001" placeholder="Longitude">
+
+      <div class="coords-grid" style="margin-top:10px;">
+        <div class="coord-field">
+          <span class="coord-tag">LAT</span>
+          <input id="latInput" type="number" step="0.00001" placeholder="40.71280">
+        </div>
+        <div class="coord-field">
+          <span class="coord-tag">LNG</span>
+          <input id="lngInput" type="number" step="0.00001" placeholder="-74.00600">
+        </div>
+        <button id="copyCoordsBtn" class="btn-copy" title="Copy coordinates">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+        </button>
       </div>
-      <div id="placeLabel" class="muted small" style="margin-top:7px"></div>
+
+      <div id="placeLabel" class="place-label"></div>
     </section>
 
+    <!-- Step 3: Movement -->
     <section class="card">
-      <h2><span class="step">3</span> Movement</h2>
-      <div class="modes" id="modeChips">
-        <button class="chip on" data-mode="fixed">Stay</button>
-        <button class="chip" data-mode="jitter">Roam</button>
-        <button class="chip" data-mode="custom">Draw</button>
-        <button class="chip" data-mode="trip">Trip</button>
+      <div class="card-head">
+        <div class="card-title">
+          <span class="step-num">3</span>
+          <span>Movement Pattern</span>
+        </div>
       </div>
 
+      <div class="segmented-control" id="modeChips">
+        <button class="seg-btn on" data-mode="fixed">Stay</button>
+        <button class="seg-btn" data-mode="jitter">Roam</button>
+        <button class="seg-btn" data-mode="custom">Draw</button>
+        <button class="seg-btn" data-mode="trip">Trip</button>
+      </div>
+
+      <!-- Roam Options -->
       <div id="roamOpts" class="optrow hidden">
         <div class="optgrid">
           <div>
-            <label class="optlabel">Wander radius (m)</label>
+            <label class="optlabel">WANDER RADIUS (M)</label>
             <input id="radiusInput" type="number" value="120" min="15" max="2000">
           </div>
           <div>
-            <label class="optlabel">Walking speed (km/h)</label>
+            <label class="optlabel">WALKING SPEED (KM/H)</label>
             <input id="roamSpeedInput" type="number" value="4.5" min="0.5" max="30" step="0.5">
           </div>
         </div>
-        <div class="hint">Drifts between random points inside the radius, like a real person on foot.</div>
+        <div class="hint">Simulates realistic pedestrian wander around the pin.</div>
       </div>
 
+      <!-- Custom Draw Options -->
       <div id="customOpts" class="optrow hidden">
-        <div class="hint"><b>Draw mode:</b> click the map to add route waypoints in order. Right-click a point in the list to remove it.</div>
-        <div class="optgrid">
+        <div class="hint">Click the map to add ordered waypoints.</div>
+        <div class="optgrid" style="margin-top:10px;">
           <div>
-            <label class="optlabel">Speed (km/h)</label>
+            <label class="optlabel">SPEED (KM/H)</label>
             <input id="customSpeedInput" type="number" value="12" min="0.5" max="200" step="0.5">
           </div>
           <div>
-            <label class="optlabel">Route behaviour</label>
-            <select id="customLoop" class="btn small" style="width:100%">
+            <label class="optlabel">BEHAVIOR</label>
+            <select id="customLoop" class="btn-select">
               <option value="false">One-way — park at end</option>
-              <option value="true">Loop forever</option>
+              <option value="true">Loop route</option>
             </select>
           </div>
         </div>
         <div id="wpList"></div>
-        <div class="row"><button id="clearWpsBtn" class="btn ghost small">Clear waypoints</button></div>
+        <div class="row" style="margin-top:10px;">
+          <button id="clearWpsBtn" class="btn small ghost">Clear waypoints</button>
+        </div>
       </div>
 
+      <!-- Trip Options -->
       <div id="tripOpts" class="optrow hidden">
-        <label class="optlabel">Destination</label>
-        <div class="row" style="margin-top:4px">
-          <input id="tripDestInput" type="text" placeholder="Where are you “going” today?">
-          <button id="tripPlanBtn" class="btn small" style="flex:0 0 auto">Plan</button>
+        <label class="optlabel">DESTINATION</label>
+        <div class="search-box" style="margin-top:4px;">
+          <input id="tripDestInput" type="text" placeholder="Enter destination city, street, place…">
+          <button id="tripPlanBtn" class="btn-inside">Plan</button>
         </div>
-        <div class="chips" id="tripProfiles" style="margin-top:9px">
-          <button class="chip on" data-profile="car">Car</button>
-          <button class="chip" data-profile="bike">Bike</button>
-          <button class="chip" data-profile="walk">Walk</button>
-          <button class="chip" data-profile="transit">Bus/Metro</button>
+
+        <div class="segmented-control mini" id="tripProfiles" style="margin-top:10px;">
+          <button class="seg-btn on" data-profile="car">Car</button>
+          <button class="seg-btn" data-profile="bike">Bike</button>
+          <button class="seg-btn" data-profile="walk">Walk</button>
+          <button class="seg-btn" data-profile="transit">Transit</button>
         </div>
-        <label class="optlabel">Optional — paste a Google Maps link (route or place)</label>
-        <input id="gmapsInput" type="text" placeholder="https://www.google.com/maps/dir/…">
-        <div class="optgrid">
+
+        <label class="optlabel" style="margin-top:12px;">GOOGLE MAPS LINK (OPTIONAL)</label>
+        <input id="gmapsInput" type="text" placeholder="https://www.google.com/maps/dir/…" style="margin-top:4px;">
+
+        <div class="optgrid" style="margin-top:10px;">
           <div>
-            <label class="optlabel">Speed factor (1 = real road speeds)</label>
+            <label class="optlabel">SPEED FACTOR</label>
             <input id="tripFactorInput" type="number" value="1" min="0.1" max="20" step="0.1">
           </div>
           <div>
-            <label class="optlabel">Trip time at this speed</label>
-            <input id="tripEta" type="text" value="plan a route first" disabled>
+            <label class="optlabel">ESTIMATED TIME</label>
+            <input id="tripEta" type="text" value="Plan a route first" disabled>
           </div>
         </div>
-        <div id="tripSummary" class="tripsummary hidden"></div>
-        <div class="hint" id="tripHint">
-          Start point = <b>the map marker</b>, or press <b>Use my live location</b> (the PC's Wi-Fi/IP position, which is where the phone is since it's plugged into it).
-          Speeds follow the real road: fast on highways, slow in city streets.
-          A factor of 2 travels twice as fast; Bus/Metro holds a transit-like average
-          since free routers don't publish live timetables.
+
+        <div id="tripRoutesList" class="chips hidden" style="margin-top:10px;"></div>
+        <div id="tripSummary" class="tripsummary hidden" style="margin-top:10px;"></div>
+        <div class="hint" id="tripHint" style="margin-top:8px;">
+          Starting location is based on your map pin or live location.
         </div>
       </div>
     </section>
 
+    <!-- Step 4: Control -->
     <section class="card">
-      <h2><span class="step">4</span> Control</h2>
+      <div class="card-head">
+        <div class="card-title">
+          <span class="step-num">4</span>
+          <span>Simulation Control</span>
+        </div>
+      </div>
+
+      <div class="row duration-row" style="margin-bottom:12px;align-items:center;">
+        <label class="optlabel" style="margin:0;flex:1;">GPX Playback Duration</label>
+        <select id="durationSelect" class="btn-select" style="flex:1.2;">
+          <option value="auto" selected>Auto (Trip / 8h)</option>
+          <option value="0.5">30 minutes</option>
+          <option value="1">1 hour</option>
+          <option value="2">2 hours</option>
+          <option value="4">4 hours</option>
+          <option value="8">8 hours</option>
+          <option value="12">12 hours</option>
+          <option value="24">24 hours</option>
+        </select>
+      </div>
+
       <button id="startBtn" class="btn primary">START SPOOFING</button>
-      <div id="activeControls" class="active-controls hidden">
+
+      <div id="activeControls" class="active-controls hidden" style="margin-top:10px;">
         <button id="autoSwapBtn" class="btn swap hidden" title="Instantly switch to the new selected location with zero delay or real GPS fallback">Auto Swap</button>
         <button id="stopBtn" class="btn danger">STOP — restore real GPS</button>
       </div>
+
       <div id="sessionCard" class="session hidden"></div>
     </section>
 
-    <section class="card">
-      <h2>Log</h2>
-      <div id="log" class="log"></div>
+    <!-- Step 5: System Log Drawer -->
+    <section class="card log-card">
+      <div id="logToggle" class="log-header">
+        <span class="card-title" style="font-size:11px;">System Log</span>
+        <span id="logChevron" class="chevron">▼</span>
+      </div>
+      <div id="logWrapper" style="margin-top:10px;">
+        <div id="log" class="log"></div>
+      </div>
     </section>
 
   </aside>

@@ -38,6 +38,9 @@ def _apple_service_installed():
     return False
 
 
+import atexit
+
+
 class Engine:
     def __init__(self):
         self._lock = threading.RLock()
@@ -49,7 +52,17 @@ class Engine:
         self.adb_install_running = False
         self._last_shown = {}
         self._reap_orphans()
+        atexit.register(self._cleanup)
         self.log("[Geox] engine ready. Connect a phone with USB and hit refresh.", "good")
+
+    def _cleanup(self):
+        with self._lock:
+            sessions = list(self.sessions.values())
+        for s in sessions:
+            try:
+                s.stop()
+            except Exception:
+                pass
 
     def _reap_orphans(self):
         """Kill simulation processes orphaned by a previous crashed/restarted
@@ -57,18 +70,36 @@ class Engine:
         as the phone flapping between two places."""
         if os.name != "nt":
             return
+        my_pid = os.getpid()
+        killed = 0
         try:
             p = subprocess.run(
                 ["taskkill", "/F", "/T", "/IM", "pymobiledevice3.exe"],
                 capture_output=True, text=True, encoding="utf-8", errors="replace",
                 creationflags=0x08000000,
             )
-            killed = (p.stdout or "").upper().count("SUCCESS")
-            if killed:
-                self.log(f"[Geox] reaped {killed} orphaned spoofing process(es) "
-                         "left over from a previous run.", "warn")
+            killed += (p.stdout or "").upper().count("SUCCESS")
         except Exception:
             pass
+
+        try:
+            ps_cmd = (
+                f"Get-CimInstance Win32_Process | Where-Object {{ "
+                f"$_.ProcessId -ne {my_pid} -and $_.CommandLine -like '*pymobiledevice3*simulate-location*' "
+                f"}} | ForEach-Object {{ Stop-Process -Id $_.ProcessId -Force; Write-Output 'KILLED' }}"
+            )
+            p2 = subprocess.run(
+                ["powershell", "-NoProfile", "-Command", ps_cmd],
+                capture_output=True, text=True, encoding="utf-8", errors="replace",
+                timeout=10, creationflags=0x08000000,
+            )
+            killed += (p2.stdout or "").count("KILLED")
+        except Exception:
+            pass
+
+        if killed:
+            self.log(f"[Geox] reaped {killed} orphaned spoofing process(es) "
+                     "left over from a previous run.", "warn")
 
 
 

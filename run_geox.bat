@@ -12,14 +12,22 @@ rem ============================================================
 
 rem ---------- 1) existing venv: fastest path ----------
 if exist ".venv\Scripts\python.exe" (
-  ".venv\Scripts\python.exe" -m pip install --quiet -r requirements.txt
+  ".venv\Scripts\python.exe" -c "import flask, requests, pymobiledevice3" >nul 2>nul
+  if errorlevel 1 (
+    echo Verifying Geox components...
+    ".venv\Scripts\python.exe" -m pip install --quiet --disable-pip-version-check -r requirements.txt
+  )
   ".venv\Scripts\python.exe" -m geox.launch
   goto done
 )
 
 rem ---------- 2) private runtime downloaded by a previous run ----------
 if exist "runtime\python.exe" (
-  "runtime\python.exe" -m pip install --quiet -r requirements.txt
+  "runtime\python.exe" -c "import flask, requests, pymobiledevice3" >nul 2>nul
+  if errorlevel 1 (
+    echo Verifying Geox components...
+    "runtime\python.exe" -m pip install --quiet --disable-pip-version-check -r requirements.txt
+  )
   "runtime\python.exe" -m geox.launch
   goto done
 )

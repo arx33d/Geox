@@ -232,8 +232,14 @@ class AndroidSession:
         self.cfg = cfg
         self.stop_event = threading.Event()
         self.state = "connecting"
-        self.error = None
-        self.last = (float(cfg["lat"]), float(cfg["lng"]))
+        start_pt = (
+            (float(cfg["lat"]), float(cfg["lng"]))
+            if "lat" in cfg and "lng" in cfg
+            else (float(cfg["waypoints"][0][0]), float(cfg["waypoints"][0][1]))
+            if cfg.get("waypoints")
+            else (0.0, 0.0)
+        )
+        self.last = start_pt
         self.started_at = time.time()
         self.thread = threading.Thread(target=self._run, daemon=True)
 
@@ -246,6 +252,8 @@ class AndroidSession:
         self.motion = build_motion(cfg)
         if "lat" in cfg and "lng" in cfg:
             self.last = (float(cfg["lat"]), float(cfg["lng"]))
+        elif cfg.get("waypoints"):
+            self.last = (float(cfg["waypoints"][0][0]), float(cfg["waypoints"][0][1]))
         self.engine.log(
             f"[Android] AUTO SWAP -> {self.cfg.get('place') or ''} "
             f"{self.last[0]:.5f}, {self.last[1]:.5f} (seamless transition)",
@@ -260,6 +268,15 @@ class AndroidSession:
         self.stop_event.set()
 
     def snapshot(self):
+        telemetry = None
+        motion_obj = getattr(self, "motion", None)
+        if self.state == "active" and self.cfg.get("mode") == "route" and motion_obj:
+            telemetry = {
+                "progress": getattr(motion_obj, "progress", 0.0),
+                "speed_kmh": getattr(motion_obj, "speed_kmh", 0.0),
+                "remaining_s": getattr(motion_obj, "remaining_s", None),
+                "completed": getattr(motion_obj, "completed", False),
+            }
         return {
             "device_id": self.device["id"],
             "device_name": self.device.get("name") or "Android",
@@ -271,6 +288,7 @@ class AndroidSession:
             "error": self.error,
             "started_at": self.started_at,
             "last": list(self.last),
+            "telemetry": telemetry,
         }
 
     def _send(self, lat, lng, speed_mps=None):

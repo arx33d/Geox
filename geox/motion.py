@@ -124,6 +124,22 @@ class Route:
                 self.pos = min(self.pos, self.total)
         return self._point_at(self.pos)
 
+    @property
+    def progress(self):
+        return round((self.pos / self.total) * 100, 1) if self.total > 0 else 100.0
+
+    @property
+    def remaining_m(self):
+        return max(0, int(round(self.total - self.pos)))
+
+    @property
+    def speed_kmh(self):
+        return round(self.speed_mps * 3.6, 1)
+
+    @property
+    def completed(self):
+        return (not self.loop) and (self.pos >= self.total)
+
 
 class TimedRoute:
     """Travel a polyline where every segment has its own real travel time.
@@ -150,6 +166,22 @@ class TimedRoute:
         self.seg_d = [haversine_m(a, b, c, d)
                       for (a, b), (c, d) in zip(self.wps, self.wps[1:])]
         self.time = 0.0
+
+    @property
+    def progress(self):
+        return round((self.time / self.total_t) * 100, 1) if self.total_t > 0 else 100.0
+
+    @property
+    def remaining_s(self):
+        return max(0, int(round(self.total_t - self.time)))
+
+    @property
+    def speed_kmh(self):
+        return round(self.speed_mps * 3.6, 1)
+
+    @property
+    def completed(self):
+        return self.time >= self.total_t
 
     @property
     def speed_mps(self):

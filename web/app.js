@@ -7,6 +7,8 @@ const state = {
   target: { lat: 49.2827, lng: -123.1207, place: "Vancouver, Canada" },
   waypoints: [],            // custom draw mode
   trip: null,               // planned itinerary {waypoints, distance_km, ...}
+  tripRoutes: [],           // candidate itineraries for trip mode
+  selectedRouteIndex: 0,
   tripProfile: "car",
   devices: [],
   selected: null,
@@ -43,16 +45,60 @@ function redrawOverlays() {
       radius: r, color: "#22c55e", weight: 1, fillOpacity: 0.06, dashArray: "4 6",
     }).addTo(layers);
   }
-  const route = state.mode === "trip" && state.trip ? state.trip.waypoints : state.waypoints;
-  if ((state.mode === "custom" || state.mode === "trip") && route.length) {
-    L.polyline(route, { color: "#22c55e", weight: 3, opacity: 0.85 }).addTo(layers);
-    route.forEach((p, i) => {
+
+  if (state.mode === "custom" && state.waypoints.length) {
+    L.polyline(state.waypoints, { color: "#22c55e", weight: 3, opacity: 0.85 }).addTo(layers);
+    state.waypoints.forEach((p) => {
       L.circleMarker(p, {
-        radius: state.mode === "custom" ? 5 : 2.5,
-        color: "#22c55e", fillColor: "#05210f", fillOpacity: 1, weight: 2,
+        radius: 5, color: "#22c55e", fillColor: "#05210f", fillOpacity: 1, weight: 2,
       }).addTo(layers);
     });
   }
+
+  if (state.mode === "trip" && state.trip && state.trip.waypoints && state.trip.waypoints.length) {
+    // 1. Draw alternative candidate routes in muted slate with click-to-select
+    if (state.tripRoutes && state.tripRoutes.length > 1) {
+      state.tripRoutes.forEach((alt, idx) => {
+        if (idx !== state.selectedRouteIndex && alt.waypoints && alt.waypoints.length) {
+          const altPoly = L.polyline(alt.waypoints, {
+            color: "#64748b",
+            weight: 4,
+            opacity: 0.55,
+            dashArray: "6 8",
+          }).addTo(layers);
+          altPoly.bindTooltip(`<b>${alt.summary || "Option " + (idx + 1)}</b><br>${alt.distance_km} km · ${alt.duration_min} min<br><span style="color:#22c55e;font-size:11px">Click to select this route</span>`, { sticky: true });
+          altPoly.on("click", () => selectRoute(idx));
+          altPoly.on("mouseover", () => altPoly.setStyle({ color: "#94a3b8", opacity: 0.9, weight: 5 }));
+          altPoly.on("mouseout", () => altPoly.setStyle({ color: "#64748b", opacity: 0.55, weight: 4 }));
+        }
+      });
+    }
+
+    // 2. Draw active selected route in vibrant green
+    const wps = state.trip.waypoints;
+    const mainPoly = L.polyline(wps, {
+      color: "#22c55e",
+      weight: 5,
+      opacity: 0.9,
+    }).addTo(layers);
+    mainPoly.bindTooltip(`<b>${state.trip.summary || "Selected Route"}</b><br>${state.trip.distance_km} km · ${state.trip.duration_min} min`, { sticky: true });
+
+    // Start point marker
+    L.circleMarker(wps[0], {
+      radius: 6, color: "#22c55e", fillColor: "#ffffff", fillOpacity: 1, weight: 3,
+    }).bindTooltip("Trip Start", { direction: "top" }).addTo(layers);
+
+    // End point marker
+    L.circleMarker(wps[wps.length - 1], {
+      radius: 6, color: "#ef4444", fillColor: "#ffffff", fillOpacity: 1, weight: 3,
+    }).bindTooltip(state.trip.dest_label ? `Destination: ${state.trip.dest_label}` : "Destination", { direction: "top" }).addTo(layers);
+  }
+}
+
+let reverseGeocodeTimer = null;
+function debouncedReverseGeocode(delay = 350) {
+  clearTimeout(reverseGeocodeTimer);
+  reverseGeocodeTimer = setTimeout(reverseGeocode, delay);
 }
 
 marker.on("drag", (e) => {
@@ -67,9 +113,16 @@ marker.on("dragend", async () => {
 });
 
 map.on("click", (e) => {
-  if (state.mode !== "custom") return;
-  state.waypoints.push([e.latlng.lat, e.latlng.lng]);
-  renderWaypoints();
+  if (state.mode === "custom") {
+    state.waypoints.push([e.latlng.lat, e.latlng.lng]);
+    renderWaypoints();
+  } else if (state.mode === "fixed" || state.mode === "jitter") {
+    state.target = { lat: e.latlng.lat, lng: e.latlng.lng, place: "" };
+    syncCoordInputs();
+    redrawOverlays();
+    if (typeof updateControlButtons === "function") updateControlButtons();
+    debouncedReverseGeocode();
+  }
 });
 
 /* ------------------------------------------------------------ utilities */
@@ -140,6 +193,16 @@ async function doSearch() {
 }
 $("searchBtn").addEventListener("click", doSearch);
 $("searchInput").addEventListener("keydown", (e) => e.key === "Enter" && doSearch());
+let searchDebounceTimer = null;
+$("searchInput").addEventListener("input", () => {
+  clearTimeout(searchDebounceTimer);
+  const q = $("searchInput").value.trim();
+  if (q.length >= 3) {
+    searchDebounceTimer = setTimeout(doSearch, 400);
+  } else if (q.length === 0) {
+    $("searchResults").classList.add("hidden");
+  }
+});
 document.addEventListener("click", (e) => {
   if (!$("searchInput").contains(e.target) && !$("searchResults").contains(e.target))
     $("searchResults").classList.add("hidden");
@@ -158,12 +221,29 @@ const PRESETS = [
   ["Honolulu", 21.3069, -157.8583],
   ["Las Vegas", 36.1699, -115.1398],
 ];
-for (const [label, lat, lng] of PRESETS) {
-  const b = document.createElement("button");
-  b.className = "chip";
-  b.textContent = label;
-  b.addEventListener("click", () => setTarget(lat, lng, label.replace(/^\S+\s/, "")));
-  $("presets").appendChild(b);
+const presetSel = $("presetSelect");
+if (presetSel) {
+  for (const [label, lat, lng] of PRESETS) {
+    const opt = document.createElement("option");
+    opt.value = `${lat}|${lng}|${label}`;
+    opt.textContent = label;
+    presetSel.appendChild(opt);
+  }
+  presetSel.addEventListener("change", () => {
+    const val = presetSel.value;
+    if (!val) return;
+    const [lat, lng, label] = val.split("|");
+    setTarget(+lat, +lng, label);
+    presetSel.selectedIndex = 0;
+  });
+} else if ($("presets")) {
+  for (const [label, lat, lng] of PRESETS) {
+    const b = document.createElement("button");
+    b.className = "chip";
+    b.textContent = label;
+    b.addEventListener("click", () => setTarget(lat, lng, label.replace(/^\S+\s/, "")));
+    $("presets").appendChild(b);
+  }
 }
 
 function setTarget(lat, lng, place) {
@@ -175,10 +255,33 @@ function setTarget(lat, lng, place) {
   if (typeof updateControlButtons === "function") updateControlButtons();
 }
 
+/* ----------------------------------------------------------------- quick copy */
+const copyCoordsBtn = $("copyCoordsBtn");
+if (copyCoordsBtn) {
+  copyCoordsBtn.addEventListener("click", async () => {
+    const text = `${fmtCoord(state.target.lat)}, ${fmtCoord(state.target.lng)}`;
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(text);
+      } else {
+        const inp = document.createElement("textarea");
+        inp.value = text;
+        document.body.appendChild(inp);
+        inp.select();
+        document.execCommand("copy");
+        document.body.removeChild(inp);
+      }
+      toast(`Copied: ${text}`, "ok");
+    } catch {
+      toast(`Coordinates: ${text}`);
+    }
+  });
+}
+
 /* ------------------------------------------------------------- mode tabs */
 function setMode(mode) {
   state.mode = mode;
-  document.querySelectorAll("#modeChips .chip").forEach((c) =>
+  document.querySelectorAll("#modeChips .chip, #modeChips .seg-btn").forEach((c) =>
     c.classList.toggle("on", c.dataset.mode === mode));
   $("roamOpts").classList.toggle("hidden", mode !== "jitter");
   $("customOpts").classList.toggle("hidden", mode !== "custom");
@@ -186,14 +289,24 @@ function setMode(mode) {
   // in Trip mode the marker is where the phone really is, not where it fakes being
   $("destHeadingText").textContent = mode === "trip" ? "Starting point" : "Destination";
   $("liveLocBtn").classList.toggle("hidden", mode !== "trip");
+  if (mode !== "trip") {
+    removeTripTrackingMarker();
+  }
   redrawOverlays();
   if (typeof updateControlButtons === "function") updateControlButtons();
 }
-document.querySelectorAll("#modeChips .chip").forEach((c) =>
+document.querySelectorAll("#modeChips .chip, #modeChips .seg-btn").forEach((c) =>
   c.addEventListener("click", () => setMode(c.dataset.mode)));
 
+$("radiusInput").addEventListener("input", () => {
+  redrawOverlays();
+  if (typeof updateControlButtons === "function") updateControlButtons();
+});
 $("radiusInput").addEventListener("change", () => {
   redrawOverlays();
+  if (typeof updateControlButtons === "function") updateControlButtons();
+});
+$("roamSpeedInput").addEventListener("input", () => {
   if (typeof updateControlButtons === "function") updateControlButtons();
 });
 $("roamSpeedInput").addEventListener("change", () => {
@@ -214,32 +327,121 @@ function renderWaypoints() {
   redrawOverlays();
   if (typeof updateControlButtons === "function") updateControlButtons();
 }
-$("clearWpsBtn").addEventListener("click", () => { state.waypoints = []; renderWaypoints(); });
+$("customSpeedInput").addEventListener("input", () => {
+  if (typeof updateControlButtons === "function") updateControlButtons();
+});
+$("customLoop").addEventListener("change", () => {
+  if (typeof updateControlButtons === "function") updateControlButtons();
+});
+
+const clearWpsBtn = $("clearWpsBtn");
+if (clearWpsBtn) {
+  clearWpsBtn.addEventListener("click", () => {
+    state.waypoints = [];
+    renderWaypoints();
+    toast("Waypoints cleared.", "ok");
+  });
+}
+
+/* ----------------------------------------------- trip live tracking marker */
+let tripTrackingMarker = null;
+
+function updateTripTrackingMarker(lat, lng) {
+  if (!tripTrackingMarker) {
+    const icon = L.divIcon({
+      className: "",
+      html: `<div class="traj-vehicle-dot"><div class="traj-nav-puck"></div></div>`,
+      iconSize: [18, 18],
+      iconAnchor: [9, 9],
+    });
+    tripTrackingMarker = L.marker([lat, lng], { icon, zIndexOffset: 3000 });
+  }
+  if (!map.hasLayer(tripTrackingMarker)) {
+    tripTrackingMarker.addTo(map);
+  }
+  tripTrackingMarker.setLatLng([lat, lng]);
+  tripTrackingMarker.bindTooltip(
+    `<b>Live location</b><br>${fmtCoord(lat)}, ${fmtCoord(lng)}`,
+    { direction: "top", offset: [0, -8] }
+  );
+}
+
+function removeTripTrackingMarker() {
+  if (tripTrackingMarker && map.hasLayer(tripTrackingMarker)) {
+    map.removeLayer(tripTrackingMarker);
+  }
+}
 
 /* ----------------------------------------------------------------- trip */
-document.querySelectorAll("#tripProfiles .chip").forEach((c) =>
+document.querySelectorAll("#tripProfiles .chip, #tripProfiles .seg-btn").forEach((c) =>
   c.addEventListener("click", () => {
     state.tripProfile = c.dataset.profile;
-    document.querySelectorAll("#tripProfiles .chip").forEach((x) =>
+    document.querySelectorAll("#tripProfiles .chip, #tripProfiles .seg-btn").forEach((x) =>
       x.classList.toggle("on", x === c));
   }));
 
 $("tripPlanBtn").addEventListener("click", planTrip);
 $("tripDestInput").addEventListener("keydown", (e) => e.key === "Enter" && planTrip());
-$("tripFactorInput").addEventListener("change", updateTripEta);
+$("tripFactorInput").addEventListener("input", () => {
+  updateTripEta();
+  if (typeof updateControlButtons === "function") updateControlButtons();
+});
+$("tripFactorInput").addEventListener("change", () => {
+  updateTripEta();
+  if (typeof updateControlButtons === "function") updateControlButtons();
+});
+const durationSel = $("durationSelect");
+if (durationSel) {
+  durationSel.addEventListener("change", () => {
+    if (typeof updateControlButtons === "function") updateControlButtons();
+  });
+}
+
+function selectRoute(idx) {
+  if (!state.tripRoutes || !state.tripRoutes[idx]) return;
+  state.selectedRouteIndex = idx;
+  state.trip = state.tripRoutes[idx];
+  renderTripRoutes();
+  redrawOverlays();
+  updateTripEta();
+  if (typeof updateControlButtons === "function") updateControlButtons();
+}
+
+function renderTripRoutes() {
+  const el = $("tripRoutesList");
+  if (!state.tripRoutes || state.tripRoutes.length <= 1) {
+    el.classList.add("hidden");
+    el.innerHTML = "";
+    return;
+  }
+  el.classList.remove("hidden");
+  el.innerHTML = state.tripRoutes.map((rt, i) => {
+    const isSel = i === state.selectedRouteIndex;
+    const badgeText = rt.is_fastest ? "Fastest" : `+${Math.max(1, rt.duration_min - state.tripRoutes[0].duration_min)}m`;
+    const shortVia = rt.summary ? rt.summary.replace(/^via\s+/, "") : `Route ${i + 1}`;
+    return `<button class="chip ${isSel ? 'on' : ''}" data-idx="${i}" title="${rt.summary || ''} (${rt.distance_km} km, ${rt.duration_min} min)">
+      ${isSel ? '✓ ' : ''}${shortVia} · ${rt.duration_min}m (${badgeText})
+    </button>`;
+  }).join("");
+
+  el.querySelectorAll(".chip").forEach((card) => {
+    card.addEventListener("click", () => {
+      selectRoute(+card.dataset.idx);
+    });
+  });
+}
 
 function updateTripEta() {
   if (!state.trip) return;
   const f = Math.min(Math.max(+$("tripFactorInput").value || 1, 0.1), 20);
   const mins = Math.max(1, Math.round(state.trip.duration_min / f));
-  $("tripEta").value = `about ${mins >= 60 ? Math.floor(mins / 60) + " h " : ""}${mins % 60} min`;
+  $("tripEta").value = `~${mins >= 60 ? Math.floor(mins / 60) + "h " : ""}${mins % 60}m (${state.trip.distance_km} km)`;
   if (!$("tripSummary").classList.contains("hidden")) {
-    const label = mins >= 60 ? `${Math.floor(mins / 60)} h ${mins % 60} min` : `${mins} min`;
+    const label = mins >= 60 ? `${Math.floor(mins / 60)}h ${mins % 60}m` : `${mins} min`;
+    const viaText = state.trip.summary ? `<b>${state.trip.summary}</b> · ` : "";
     $("tripSummary").innerHTML =
-      `<b>${state.trip.distance_km} km</b> · about <b>${label}</b> · ` +
-      `avg ${(state.trip.speed_kmh * f).toFixed(1)} km/h · ${state.trip.waypoints.length} points<br>` +
-      `Destination: ${state.trip.dest_label}<br>Speeds follow the real road (highway fast, city slow), ` +
-      `scaled ×${f}, then it parks at the destination.`;
+      `${viaText}<b>${state.trip.distance_km} km</b> · <b>${label}</b> (${(state.trip.speed_kmh * f).toFixed(0)} km/h avg)<br>` +
+      `<span class="muted small">${state.trip.dest_label || ""}</span>`;
   }
 }
 
@@ -257,15 +459,29 @@ async function planTrip() {
   $("tripSummary").innerHTML = "Planning route…";
   try {
     const trip = await api("/api/route", body);
-    state.trip = trip;
+    state.tripRoutes = trip.routes && trip.routes.length ? trip.routes : [trip];
+    state.selectedRouteIndex = 0;
+    state.trip = state.tripRoutes[0];
+    renderTripRoutes();
     setMode("trip");
     redrawOverlays();
     updateTripEta();
-    map.fitBounds(L.polyline(trip.waypoints).getBounds(), { padding: [40, 40] });
-    toast("Itinerary planned — press START SPOOFING or Auto Swap.", "ok");
+
+    // Collect all waypoints across alternative routes to fit map view
+    const allWps = [];
+    state.tripRoutes.forEach((r) => { if (r.waypoints) allWps.push(...r.waypoints); });
+    if (allWps.length) {
+      map.fitBounds(L.polyline(allWps).getBounds(), { padding: [40, 40] });
+    }
+
+    toast(state.tripRoutes.length > 1
+      ? `Found ${state.tripRoutes.length} route options — pick one on the list or map.`
+      : "Itinerary planned — press START SPOOFING or Auto Swap.", "ok");
     if (typeof updateControlButtons === "function") updateControlButtons();
   } catch (e) {
     state.trip = null;
+    state.tripRoutes = [];
+    renderTripRoutes();
     $("tripSummary").innerHTML = `<span style="color:#ef4444">${e.message}</span>`;
   }
 }
@@ -362,9 +578,38 @@ function renderSession(s) {
     return;
   }
   const modeName = { fixed: "stay put", jitter: "roaming", custom: "drawn route", route: "itinerary" }[s.mode] || s.mode;
+  let hudHtml = "";
+  if (s.mode === "route" && s.telemetry) {
+    const t = s.telemetry;
+    const speedStr = t.completed ? "Arrived" : `${t.speed_kmh} km/h`;
+    let remStr = "";
+    if (t.completed) {
+      remStr = "Holding destination";
+    } else if (t.remaining_s != null) {
+      const m = Math.ceil(t.remaining_s / 60);
+      remStr = m >= 60 ? `${Math.floor(m / 60)}h ${m % 60}m remaining` : `${m} min remaining`;
+    }
+    const pct = Math.min(100, Math.max(0, Math.round(t.progress)));
+    hudHtml = `
+      <div class="trip-hud">
+        <div class="hud-row">
+          <span class="hud-title">TRIP TELEMETRY</span>
+          <span class="hud-val">${t.completed ? "100%" : pct + "%"}</span>
+        </div>
+        <div class="hud-progress-bg">
+          <div class="hud-progress-fill" style="width: ${pct}%;"></div>
+        </div>
+        <div class="hud-meta">
+          <span>${speedStr}</span>
+          <span>${remStr}</span>
+        </div>
+      </div>
+    `;
+  }
   el.innerHTML = `<span class="live"></span><b>Spoofing ${s.device_name}</b> — ${modeName}<br>
     ${s.place ? s.place + "<br>" : ""}now at ${fmtCoord(s.last[0])}, ${fmtCoord(s.last[1])}
-    ${s.engine === "dvt-tunnel-cli" ? "<br><span class='muted small'>iOS 17+ tunnel session</span>" : ""}`;
+    ${s.engine === "dvt-tunnel-cli" ? "<br><span class='muted small'>iOS 17+ tunnel session</span>" : ""}
+    ${hudHtml}`;
 }
 
 async function enableDevMode(ev) {
@@ -397,6 +642,9 @@ function hasTargetChanged() {
   const at = state.activeTarget;
   if (state.mode !== at.mode) return true;
 
+  const curDur = $("durationSelect") ? $("durationSelect").value : "auto";
+  if (curDur !== (at.duration_select || "auto")) return true;
+
   if (state.mode === "fixed" || state.mode === "jitter") {
     const dLat = Math.abs((state.target.lat || 0) - (at.lat || 0));
     const dLng = Math.abs((state.target.lng || 0) - (at.lng || 0));
@@ -410,6 +658,10 @@ function hasTargetChanged() {
   }
 
   if (state.mode === "custom") {
+    const curSpeed = +$("customSpeedInput").value || 20;
+    const curLoop = $("customLoop").value === "true";
+    if (curSpeed !== (at.speed_kmh || 20) || curLoop !== !!at.loop) return true;
+
     const curWps = state.waypoints || [];
     const prevWps = at.waypoints || [];
     if (curWps.length !== prevWps.length) return curWps.length >= 2;
@@ -427,9 +679,24 @@ function hasTargetChanged() {
     const curDest = state.trip.dest_label || "";
     const prevDest = at.trip.dest_label || "";
     if (curDest !== prevDest) return true;
+
+    if ((state.trip.summary || "") !== (at.trip.summary || "")) return true;
+    if (Math.abs((state.trip.distance_km || 0) - (at.trip.distance_km || 0)) > 0.05) return true;
+    if (Math.abs((state.trip.duration_min || 0) - (at.trip.duration_min || 0)) > 0.2) return true;
+
+    const curFactor = Math.min(Math.max(+$("tripFactorInput").value || 1, 0.1), 20);
+    if (Math.abs(curFactor - (at.speed_factor || 1)) > 0.05) return true;
+
     const curWps = state.trip.waypoints || [];
     const prevWps = at.trip.waypoints || [];
-    return curWps.length !== prevWps.length;
+    if (curWps.length !== prevWps.length) return true;
+    if (curWps.length > 0 && prevWps.length > 0) {
+      const mid = Math.floor(curWps.length / 2);
+      if (Math.abs(curWps[0][0] - prevWps[0][0]) > 0.0001 || Math.abs(curWps[0][1] - prevWps[0][1]) > 0.0001) return true;
+      if (Math.abs(curWps[mid][0] - prevWps[mid][0]) > 0.0001 || Math.abs(curWps[mid][1] - prevWps[mid][1]) > 0.0001) return true;
+      if (Math.abs(curWps[curWps.length - 1][0] - prevWps[prevWps.length - 1][0]) > 0.0001 || Math.abs(curWps[curWps.length - 1][1] - prevWps[prevWps.length - 1][1]) > 0.0001) return true;
+    }
+    return false;
   }
 
   return false;
@@ -468,6 +735,8 @@ async function poll() {
         lat: s.last[0],
         lng: s.last[1],
         place: s.place || "",
+        duration_select: $("durationSelect") ? $("durationSelect").value : "auto",
+        speed_factor: Math.min(Math.max(+$("tripFactorInput").value || 1, 0.1), 20),
       };
       // page reloaded mid-spoof: sync the target to the running spoof so the
       // AutoSwap button doesn't offer a stale default location instead
@@ -475,6 +744,14 @@ async function poll() {
       syncCoordInputs();
     } else if (!s || s.state === "stopped" || s.state === "failed") {
       state.activeTarget = null;
+    }
+
+    // ONLY show live tracking marker when in Trip mode
+    const isTripActive = s && s.state === "active" && state.mode === "trip" && s.last && s.last.length >= 2;
+    if (isTripActive) {
+      updateTripTrackingMarker(s.last[0], s.last[1]);
+    } else {
+      removeTripTrackingMarker();
     }
 
     updateControlButtons();
@@ -533,6 +810,13 @@ function buildPayload() {
   const devId = state.selected || (state.session && state.session.device_id);
   if (!devId) throw new Error("Select a device first (step 1).");
   const body = { device_id: devId, place: state.target.place };
+  const durSelect = $("durationSelect");
+  if (durSelect && durSelect.value !== "auto") {
+    const hours = parseFloat(durSelect.value);
+    if (!isNaN(hours) && hours > 0) {
+      body.playback_hours = hours;
+    }
+  }
   if (state.mode === "fixed") {
     Object.assign(body, { mode: "fixed", lat: state.target.lat, lng: state.target.lng });
   } else if (state.mode === "jitter") {
@@ -571,6 +855,9 @@ $("startBtn").addEventListener("click", async () => {
       place: body.place,
       radius_m: body.radius_m,
       speed_kmh: body.speed_kmh,
+      speed_factor: body.speed_factor,
+      duration_select: $("durationSelect") ? $("durationSelect").value : "auto",
+      loop: body.loop,
       waypoints: body.waypoints ? JSON.parse(JSON.stringify(body.waypoints)) : null,
       trip: state.trip ? JSON.parse(JSON.stringify(state.trip)) : null,
     };
@@ -593,6 +880,9 @@ if (autoSwapBtn) {
         place: body.place,
         radius_m: body.radius_m,
         speed_kmh: body.speed_kmh,
+        speed_factor: body.speed_factor,
+        duration_select: $("durationSelect") ? $("durationSelect").value : "auto",
+        loop: body.loop,
         waypoints: body.waypoints ? JSON.parse(JSON.stringify(body.waypoints)) : null,
         trip: state.trip ? JSON.parse(JSON.stringify(state.trip)) : null,
       };
@@ -605,6 +895,7 @@ if (autoSwapBtn) {
 
 $("stopBtn").addEventListener("click", async () => {
   try {
+    removeTripTrackingMarker();
     await api("/api/stop", { device_id: state.selected || (state.session && state.session.device_id) });
     state.activeTarget = null;
     toast("Stopped — real GPS restored.", "ok");
@@ -613,9 +904,31 @@ $("stopBtn").addEventListener("click", async () => {
   } catch (e) { toast(e.message, "error"); }
 });
 
+/* ---------------------------------------------------------------- log card */
+const logToggle = $("logToggle");
+const logWrapper = $("logWrapper");
+const logChevron = $("logChevron");
+if (logToggle && logWrapper) {
+  logToggle.addEventListener("click", () => {
+    const isHidden = logWrapper.classList.toggle("hidden");
+    if (logChevron) {
+      logChevron.textContent = isHidden ? "▶" : "▼";
+    }
+  });
+}
+
 /* ----------------------------------------------------------------- boot */
+let pollTimer = null;
+function schedulePoll() {
+  clearTimeout(pollTimer);
+  const interval = (state.session && state.session.state === "active") ? 1000 : 2500;
+  pollTimer = setTimeout(async () => {
+    await poll();
+    schedulePoll();
+  }, interval);
+}
+
 syncCoordInputs();
 renderWaypoints();
 setMode("fixed");
-poll();
-setInterval(poll, 2500);
+poll().then(() => schedulePoll());

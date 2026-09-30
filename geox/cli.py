@@ -311,6 +311,13 @@ Examples:
         default=1.0,
         help="Trip speed multiplier (default: 1.0 = real road speeds, 2.0 = 2x faster).",
     )
+    parser.add_argument(
+        "--duration", "--playback-hours",
+        dest="duration_hours",
+        type=float,
+        default=None,
+        help="Session/GPX duration in hours (e.g. 0.5, 1.0, 2.0, 8.0).",
+    )
 
     # Device selection and control
     parser.add_argument(
@@ -468,6 +475,8 @@ def main(argv=None):
             "speed_factor": args.speed_factor,
             "place": f"{from_label} → {to_label}",
         }
+        if args.duration_hours is not None:
+            cfg["playback_hours"] = args.duration_hours
 
         try:
             target_device = pick_target_device(engine, args.device)
@@ -502,6 +511,8 @@ def main(argv=None):
         "lng": lng,
         "place": label,
     }
+    if args.duration_hours is not None:
+        cfg["playback_hours"] = args.duration_hours
     if mode == "jitter":
         cfg["radius_m"] = radius
         cfg["speed_kmh"] = speed

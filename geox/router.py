@@ -203,32 +203,37 @@ def parse_trip_input(payload):
     return origin, dest, label, profile
 
 
-def plan_route(from_ll, to_ll, profile):
-    """Fetch a real itinerary with per-segment travel times.
+def _extract_summary(route, route_id):
+    road_names = []
+    steps = []
+    for leg in route.get("legs", []):
+        for s in leg.get("steps", []):
+            name = (s.get("name") or "").strip()
+            ref = (s.get("ref") or "").strip()
+            label = f"{name} ({ref})" if name and ref and name != ref else (ref or name)
+            dist = float(s.get("distance", 0))
+            if label and dist > 50:
+                steps.append((dist, label))
+    steps.sort(key=lambda x: x[0], reverse=True)
+    seen = set()
+    for _, name in steps:
+        if name not in seen:
+            seen.add(name)
+            road_names.append(name)
+            if len(road_names) >= 2:
+                break
+    if road_names:
+        return f"via {', '.join(road_names)}"
+    return f"Option {route_id + 1}"
 
-    Returns downsampled waypoints plus ``seg_seconds``: the real time each
-    segment takes, so the spoofed location speeds up on highways and slows
-    down in city streets instead of moving at one flat average.
-    """
-    url = (
-        f"{OSRM[profile]}/{from_ll[1]:.6f},{from_ll[0]:.6f};"
-        f"{to_ll[1]:.6f},{to_ll[0]:.6f}"
-    )
-    r = requests.get(url, params={
-        "geometries": "geojson", "overview": "full", "annotations": "true",
-    }, timeout=30)
-    r.raise_for_status()
-    data = r.json()
-    if data.get("code") != "Ok" or not data.get("routes"):
-        raise ValueError(f"Router could not find a {profile} itinerary ({data.get('code')}).")
-    route = data["routes"][0]
 
+def _process_osrm_route(route, profile, route_id=0):
     coords = [(p[1], p[0]) for p in route["geometry"]["coordinates"]]  # lon,lat → lat,lng
     durs = []
-    for leg in route["legs"]:
+    for leg in route.get("legs", []):
         durs += [float(x) for x in (leg.get("annotation") or {}).get("duration", [])]
-    distance_m = float(route["distance"])
-    real_duration_s = float(route["duration"])
+    distance_m = float(route.get("distance", 0))
+    real_duration_s = float(route.get("duration", 0))
 
     if len(durs) != len(coords) - 1 or not durs:
         # router gave no per-edge annotation: fall back to one flat speed
@@ -264,11 +269,57 @@ def plan_route(from_ll, to_ll, profile):
         seg_seconds.append(0.001)
 
     speed_kmh = (distance_m / 1000.0) / (real_duration_s / 3600.0) if real_duration_s > 0 else 20.0
+    summary = _extract_summary(route, route_id)
+
     return {
+        "id": route_id,
+        "summary": summary,
         "waypoints": [[round(a, 6), round(b, 6)] for a, b in waypoints],
         "seg_seconds": seg_seconds,
         "distance_km": round(distance_m / 1000.0, 2),
-        "duration_min": round(real_duration_s / 60.0),
+        "duration_min": max(1, round(real_duration_s / 60.0)),
         "speed_kmh": round(speed_kmh, 1),
         "profile": profile,
+    }
+
+
+def plan_route(from_ll, to_ll, profile):
+    """Fetch a real itinerary with per-segment travel times.
+
+    Supports alternative routes (up to 3 candidate itineraries).
+    Returns downsampled waypoints plus ``seg_seconds`` for each route,
+    so the spoofed location speeds up on highways and slows down in city streets
+    instead of moving at one flat average.
+    """
+    url = (
+        f"{OSRM[profile]}/{from_ll[1]:.6f},{from_ll[0]:.6f};"
+        f"{to_ll[1]:.6f},{to_ll[0]:.6f}"
+    )
+    r = requests.get(url, params={
+        "geometries": "geojson", "overview": "full", "annotations": "true",
+        "alternatives": "3", "steps": "true",
+    }, timeout=30)
+    r.raise_for_status()
+    data = r.json()
+    if data.get("code") != "Ok" or not data.get("routes"):
+        raise ValueError(f"Router could not find a {profile} itinerary ({data.get('code')}).")
+
+    parsed_routes = []
+    for idx, raw_route in enumerate(data["routes"]):
+        parsed_routes.append(_process_osrm_route(raw_route, profile, idx))
+
+    min_dur = min(r["duration_min"] for r in parsed_routes)
+    for r in parsed_routes:
+        r["is_fastest"] = (r["duration_min"] == min_dur)
+
+    primary = parsed_routes[0]
+    return {
+        "waypoints": primary["waypoints"],
+        "seg_seconds": primary["seg_seconds"],
+        "distance_km": primary["distance_km"],
+        "duration_min": primary["duration_min"],
+        "speed_kmh": primary["speed_kmh"],
+        "profile": profile,
+        "summary": primary["summary"],
+        "routes": parsed_routes,
     }

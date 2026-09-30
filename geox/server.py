@@ -77,11 +77,19 @@ def api_stop():
     return jsonify(snapshot=snap)
 
 
+_GEOCODE_CACHE = {}
+_REVERSE_CACHE = {}
+
+
 @app.post("/api/geocode")
 def api_geocode():
     q = (request.get_json(force=True, silent=True) or {}).get("q", "").strip()
     if len(q) < 2:
         return jsonify(results=[])
+    norm_q = q.lower()
+    now = time.time()
+    if norm_q in _GEOCODE_CACHE and now - _GEOCODE_CACHE[norm_q][0] < 3600:
+        return jsonify(results=_GEOCODE_CACHE[norm_q][1])
     try:
         r = requests.get(
             f"{NOMINATIM}/search",
@@ -94,6 +102,9 @@ def api_geocode():
             {"label": item.get("display_name", ""), "lat": float(item["lat"]), "lng": float(item["lon"])}
             for item in r.json()
         ]
+        _GEOCODE_CACHE[norm_q] = (now, results)
+        if len(_GEOCODE_CACHE) > 200:
+            _GEOCODE_CACHE.pop(next(iter(_GEOCODE_CACHE)))
     except Exception as e:  # noqa: BLE001
         return jsonify(results=[], error=f"Search failed: {e}"), 502
     return jsonify(results=results)
@@ -102,6 +113,15 @@ def api_geocode():
 @app.get("/api/reverse")
 def api_reverse():
     lat, lng = request.args.get("lat"), request.args.get("lng")
+    if not lat or not lng:
+        return jsonify(label="")
+    try:
+        key = f"{round(float(lat), 4)},{round(float(lng), 4)}"
+    except (ValueError, TypeError):
+        key = f"{lat},{lng}"
+    now = time.time()
+    if key in _REVERSE_CACHE and now - _REVERSE_CACHE[key][0] < 3600:
+        return jsonify(label=_REVERSE_CACHE[key][1])
     try:
         r = requests.get(
             f"{NOMINATIM}/reverse",
@@ -110,7 +130,11 @@ def api_reverse():
             timeout=10,
         )
         r.raise_for_status()
-        return jsonify(label=r.json().get("display_name", ""))
+        label = r.json().get("display_name", "")
+        _REVERSE_CACHE[key] = (now, label)
+        if len(_REVERSE_CACHE) > 300:
+            _REVERSE_CACHE.pop(next(iter(_REVERSE_CACHE)))
+        return jsonify(label=label)
     except Exception:
         return jsonify(label="")
 
@@ -137,6 +161,8 @@ def api_route():
             profile,
         )
         result["dest_label"] = label
+        for r in result.get("routes", []):
+            r["dest_label"] = label
     except ValueError as e:
         return jsonify(error=str(e)), 400
     except Exception as e:  # noqa: BLE001
@@ -194,11 +220,20 @@ def main():
     if not args.no_open:
         threading.Timer(1.5, lambda: webbrowser.open(url)).start()
     try:
-        from waitress import serve
-        serve(app, host=args.host, port=args.port, threads=8)
-    except ImportError:
-        # waitress not installed — fall back to Flask's built-in server
-        app.run(host=args.host, port=args.port, threaded=True, debug=False)
+        try:
+            from waitress import serve
+            serve(app, host=args.host, port=args.port, threads=8)
+        except ImportError:
+            # waitress not installed — fall back to Flask's built-in server
+            app.run(host=args.host, port=args.port, threaded=True, debug=False)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        for sid in list(engine.sessions.keys()):
+            try:
+                engine.stop(sid)
+            except Exception:
+                pass
 
 
 if __name__ == "__main__":
