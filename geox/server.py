@@ -8,6 +8,7 @@ import threading
 import time
 import webbrowser
 
+import math
 import os
 import requests
 from flask import Flask, jsonify, request, send_file, send_from_directory
@@ -93,37 +94,171 @@ _GEOCODE_CACHE = {}
 _REVERSE_CACHE = {}
 
 
-@app.post("/api/geocode")
+def haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    r = 6371.0
+    dlat = math.radians(lat2 - lat1)
+    dlon = math.radians(lon2 - lon1)
+    a = (
+        math.sin(dlat / 2.0) ** 2
+        + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlon / 2.0) ** 2
+    )
+    return r * 2.0 * math.atan2(math.sqrt(a), math.sqrt(max(0.0, 1.0 - a)))
+
+
+@app.route("/api/geocode", methods=["GET", "POST"])
 def api_geocode():
-    q = (request.get_json(force=True, silent=True) or {}).get("q", "").strip()
+    if request.method == "POST":
+        data = request.get_json(force=True, silent=True) or {}
+    else:
+        data = request.args.to_dict()
+    q = (data.get("q") or "").strip()
     if len(q) < 2:
         return jsonify(results=[])
+
+    user_lat = data.get("lat")
+    user_lng = data.get("lng")
+    has_coords = False
+    try:
+        if user_lat is not None and user_lng is not None:
+            user_lat = float(user_lat)
+            user_lng = float(user_lng)
+            if -90 <= user_lat <= 90 and -180 <= user_lng <= 180:
+                has_coords = True
+    except (ValueError, TypeError):
+        has_coords = False
+
     norm_q = q.lower()
+    cache_key = (norm_q, round(user_lat, 2) if has_coords else None, round(user_lng, 2) if has_coords else None)
     now = time.time()
+    if cache_key in _GEOCODE_CACHE and now - _GEOCODE_CACHE[cache_key][0] < 3600:
+        return jsonify(results=_GEOCODE_CACHE[cache_key][1])
     if norm_q in _GEOCODE_CACHE and now - _GEOCODE_CACHE[norm_q][0] < 3600:
         return jsonify(results=_GEOCODE_CACHE[norm_q][1])
 
     results = []
+    params = {"format": "jsonv2", "q": q, "limit": 10, "addressdetails": 1}
+    if has_coords:
+        # Bias viewbox around user's location (approx +/- 3.0 degrees ~ 300km)
+        min_lng = max(-180.0, user_lng - 3.0)
+        max_lng = min(180.0, user_lng + 3.0)
+        min_lat = max(-85.0511, user_lat - 3.0)
+        max_lat = min(85.0511, user_lat + 3.0)
+        params["viewbox"] = f"{min_lng},{max_lat},{max_lng},{min_lat}"
+        params["bounded"] = 0
+
     try:
         r = requests.get(
             f"{NOMINATIM}/search",
-            params={"format": "jsonv2", "q": q, "limit": 6, "addressdetails": 0},
+            params=params,
             headers=HEADERS,
             timeout=8,
         )
         r.raise_for_status()
-        results = [
-            {"label": item.get("display_name", ""), "lat": float(item["lat"]), "lng": float(item["lon"])}
-            for item in r.json()
-        ]
+        raw_items = r.json()
+        for item in raw_items:
+            try:
+                ilat = float(item["lat"])
+                ilng = float(item["lon"])
+            except (KeyError, ValueError, TypeError):
+                continue
+
+            address = item.get("address") or {}
+            city = (
+                address.get("city")
+                or address.get("town")
+                or address.get("village")
+                or address.get("municipality")
+                or address.get("hamlet")
+                or address.get("suburb")
+                or ""
+            )
+            state_prov = address.get("state") or address.get("province") or address.get("region") or ""
+            country = address.get("country") or ""
+            display_name = item.get("display_name", "")
+            first_part = display_name.split(",")[0].strip() if display_name else ""
+            title = item.get("name") or first_part or city or "Location"
+
+            dist_km = None
+            dist_str = ""
+            if has_coords:
+                dist_km = haversine_km(user_lat, user_lng, ilat, ilng)
+                if dist_km < 10:
+                    dist_str = f"{dist_km:.1f} km away"
+                elif dist_km < 1000:
+                    dist_str = f"{round(dist_km)} km away"
+                else:
+                    dist_str = f"{round(dist_km):,} km away"
+
+            sub_parts = []
+            if city and city.lower() != title.lower():
+                sub_parts.append(city)
+            if state_prov:
+                sub_parts.append(state_prov)
+            if country:
+                sub_parts.append(country)
+            if dist_str:
+                sub_parts.append(dist_str)
+
+            subtitle = " · ".join(sub_parts) if sub_parts else display_name
+
+            results.append({
+                "label": display_name,
+                "title": title,
+                "subtitle": subtitle,
+                "city": city,
+                "state": state_prov,
+                "country": country,
+                "dist_km": round(dist_km, 1) if dist_km is not None else None,
+                "lat": ilat,
+                "lng": ilng,
+            })
     except Exception:
         pass
 
-    if not results:
-        results = search_offline_places(q, limit=6)
+    # If proximity is known, prioritize nearby results (< 300km) and sort by distance
+    if has_coords and results:
+        def sort_key(x):
+            d = x.get("dist_km")
+            if d is None:
+                return (3, 0)
+            if d < 300:
+                return (0, d)
+            if d < 2500:
+                return (1, d)
+            return (2, d)
 
-    _GEOCODE_CACHE[norm_q] = (now, results)
-    if len(_GEOCODE_CACHE) > 200:
+        results.sort(key=sort_key)
+        results = results[:7]
+
+    if not results:
+        offline_matches = search_offline_places(q, limit=8)
+        for om in offline_matches:
+            olat = float(om["lat"])
+            olng = float(om["lng"])
+            dist_km = haversine_km(user_lat, user_lng, olat, olng) if has_coords else None
+            dist_str = f"{round(dist_km)} km away" if dist_km is not None else ""
+            label = om.get("label", "")
+            parts = [p.strip() for p in label.split(",") if p.strip()]
+            title = parts[0] if parts else label
+            sub_parts = parts[1:]
+            if dist_str:
+                sub_parts.append(dist_str)
+            results.append({
+                "label": label,
+                "title": title,
+                "subtitle": " · ".join(sub_parts) if sub_parts else label,
+                "city": parts[0] if parts else "",
+                "state": parts[1] if len(parts) > 1 else "",
+                "country": parts[-1] if len(parts) > 2 else "",
+                "dist_km": round(dist_km, 1) if dist_km is not None else None,
+                "lat": olat,
+                "lng": olng,
+            })
+        if has_coords and results:
+            results.sort(key=lambda x: x.get("dist_km") or 999999)
+
+    _GEOCODE_CACHE[cache_key] = (now, results)
+    if len(_GEOCODE_CACHE) > 250:
         _GEOCODE_CACHE.pop(next(iter(_GEOCODE_CACHE)))
     return jsonify(results=results)
 

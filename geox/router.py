@@ -25,24 +25,77 @@ OSRM = {
 TRANSIT_AVG_KMH = 22.0  # urban bus/metro door-to-door average
 
 
-def geocode_name(name):
+def geocode_name(name, proximity=None):
+    params = {"format": "jsonv2", "q": name, "limit": 6, "addressdetails": 1}
+    has_prox = False
+    if proximity and len(proximity) == 2:
+        try:
+            plat, plng = float(proximity[0]), float(proximity[1])
+            min_lng = max(-180.0, plng - 3.0)
+            max_lng = min(180.0, plng + 3.0)
+            min_lat = max(-85.0511, plat - 3.0)
+            max_lat = min(85.0511, plat + 3.0)
+            params["viewbox"] = f"{min_lng},{max_lat},{max_lng},{min_lat}"
+            params["bounded"] = 0
+            has_prox = True
+        except Exception:
+            has_prox = False
+
     try:
         r = requests.get(
             "https://nominatim.openstreetmap.org/search",
-            params={"format": "jsonv2", "q": name, "limit": 1},
+            params=params,
             headers=HEADERS,
             timeout=8,
         )
         r.raise_for_status()
         data = r.json()
         if data:
-            return float(data[0]["lat"]), float(data[0]["lon"]), data[0].get("display_name", name)
+            if has_prox and len(data) > 1:
+                import math
+
+                def _dist(item):
+                    try:
+                        dlat = math.radians(float(item["lat"]) - float(proximity[0]))
+                        dlon = math.radians(float(item["lon"]) - float(proximity[1]))
+                        a = (
+                            math.sin(dlat / 2.0) ** 2
+                            + math.cos(math.radians(float(proximity[0])))
+                            * math.cos(math.radians(float(item["lat"])))
+                            * math.sin(dlon / 2.0) ** 2
+                        )
+                        return 2.0 * math.atan2(math.sqrt(a), math.sqrt(max(0.0, 1.0 - a)))
+                    except Exception:
+                        return 999.0
+
+                data.sort(key=_dist)
+            best = data[0]
+            return float(best["lat"]), float(best["lon"]), best.get("display_name", name)
     except Exception:
         pass
 
     from .offline import search_offline_places
-    matches = search_offline_places(name, limit=1)
+
+    matches = search_offline_places(name, limit=6)
     if matches:
+        if has_prox and len(matches) > 1:
+            import math
+
+            def _off_dist(item):
+                try:
+                    dlat = math.radians(float(item["lat"]) - float(proximity[0]))
+                    dlon = math.radians(float(item["lng"]) - float(proximity[1]))
+                    a = (
+                        math.sin(dlat / 2.0) ** 2
+                        + math.cos(math.radians(float(proximity[0])))
+                        * math.cos(math.radians(float(item["lat"])))
+                        * math.sin(dlon / 2.0) ** 2
+                    )
+                    return 2.0 * math.atan2(math.sqrt(a), math.sqrt(max(0.0, 1.0 - a)))
+                except Exception:
+                    return 999.0
+
+            matches.sort(key=_off_dist)
         return float(matches[0]["lat"]), float(matches[0]["lng"]), matches[0]["label"]
 
     raise ValueError(f"Could not find “{name}” — try a clearer place name or search offline places.")
@@ -184,8 +237,15 @@ def parse_trip_input(payload):
         raise ValueError(f"Unknown profile {profile!r}")
 
     gmaps_url = (payload.get("gmaps_url") or "").strip()
-    origin = payload.get("from")  # {lat, lng} or None
-    dest = payload.get("to")      # {lat, lng} or {name} or None
+    origin = payload.get("from") or payload.get("start")  # {lat, lng} or None
+    dest = payload.get("to")      # {lat, lng} or {name} or str or None
+
+    if isinstance(dest, str):
+        m = re.match(r"^([+-]?\d+(?:\.\d+)?)\s*[,;\s]\s*([+-]?\d+(?:\.\d+)?)$", dest.strip())
+        if m:
+            dest = {"lat": float(m.group(1)), "lng": float(m.group(2))}
+        else:
+            dest = {"name": dest.strip()}
 
     if gmaps_url:
         pairs = _coords_from_text(gmaps_url)
@@ -203,8 +263,19 @@ def parse_trip_input(payload):
     if not dest:
         raise ValueError("Pick a destination (search, map click, or Google Maps link).")
 
-    if isinstance(dest, dict) and "name" in dest and "lat" not in dest:
-        lat, lng, label = geocode_name(dest["name"])
+    if isinstance(dest, dict) and "name" in dest and ("lat" not in dest or dest.get("lat") is None):
+        origin_coords = None
+        if origin and isinstance(origin, dict) and "lat" in origin and "lng" in origin:
+            try:
+                origin_coords = (float(origin["lat"]), float(origin["lng"]))
+            except Exception:
+                pass
+        lat, lng, label = geocode_name(dest["name"], proximity=origin_coords)
+        dest = {"lat": lat, "lng": lng}
+    elif isinstance(dest, dict) and "lat" in dest and "lng" in dest:
+        lat = float(dest["lat"])
+        lng = float(dest["lng"])
+        label = dest.get("name") or dest.get("label") or f"{lat:.5f}, {lng:.5f}"
         dest = {"lat": lat, "lng": lng}
     else:
         label = f"{float(dest['lat']):.5f}, {float(dest['lng']):.5f}"

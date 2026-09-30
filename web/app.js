@@ -188,6 +188,19 @@ map.on("click", (e) => {
     redrawOverlays();
     if (typeof updateControlButtons === "function") updateControlButtons();
     debouncedReverseGeocode();
+  } else if (state.mode === "trip") {
+    const lat = e.latlng.lat;
+    const lng = e.latlng.lng;
+    selectedTripDest = {
+      lat: lat,
+      lng: lng,
+      title: `${fmtCoord(lat)}, ${fmtCoord(lng)}`,
+      label: `Pinned Destination (${fmtCoord(lat)}, ${fmtCoord(lng)})`,
+    };
+    if ($("tripDestInput")) $("tripDestInput").value = `${fmtCoord(lat)}, ${fmtCoord(lng)}`;
+    if ($("tripSearchResults")) $("tripSearchResults").classList.add("hidden");
+    toast(`Destination pinned at ${fmtCoord(lat)}, ${fmtCoord(lng)}`, "ok");
+    planTrip();
   }
 });
 
@@ -284,7 +297,11 @@ async function doSearch(autoCommit = false) {
   $("searchResults").innerHTML = `<div class="res muted">Searching…</div>`;
 
   try {
-    const d = await api("/api/geocode", { q });
+    const d = await api("/api/geocode", {
+      q,
+      lat: state.target.lat,
+      lng: state.target.lng,
+    });
     if (!d.results || !d.results.length) {
       $("searchResults").innerHTML = `<div class="res muted">No locations found</div>`;
       return;
@@ -294,22 +311,30 @@ async function doSearch(autoCommit = false) {
       const top = d.results[0];
       setTarget(top.lat, top.lng, top.label);
       $("searchResults").classList.add("hidden");
-      $("searchInput").value = top.label.split(",")[0];
-      toast(`Navigated to ${top.label.split(",")[0]}`, "ok");
+      $("searchInput").value = top.title || top.label.split(",")[0];
+      toast(`Navigated to ${top.title || top.label.split(",")[0]}`, "ok");
       return;
     }
 
     $("searchResults").innerHTML = d.results
-      .map((r, i) => `<div class="res" data-i="${i}" data-lat="${r.lat}" data-lng="${r.lng}" data-label="${r.label.replace(/"/g, '&quot;')}">${r.label}</div>`).join("");
+      .map(
+        (r, i) => `
+        <div class="res" data-i="${i}" data-lat="${r.lat}" data-lng="${r.lng}" data-title="${(r.title || '').replace(/"/g, '&quot;')}" data-label="${(r.label || '').replace(/"/g, '&quot;')}">
+          <span class="res-title">${r.title}</span>
+          <span class="res-sub">${r.subtitle || r.label}</span>
+        </div>`
+      )
+      .join("");
 
     $("searchResults").querySelectorAll(".res").forEach((el) => {
       el.addEventListener("click", () => {
         const lat = +el.dataset.lat;
         const lng = +el.dataset.lng;
         const label = el.dataset.label;
+        const title = el.dataset.title;
         setTarget(lat, lng, label);
         $("searchResults").classList.add("hidden");
-        $("searchInput").value = label.split(",")[0];
+        $("searchInput").value = title || label.split(",")[0];
       });
     });
   } catch (e) {
@@ -343,13 +368,15 @@ document.addEventListener("click", (e) => {
     $("searchResults").classList.add("hidden");
   }
   const trRes = $("tripSearchResults");
-  if (trRes && $("tripDestInput") && !$("tripDestInput").contains(e.target) && !trRes.contains(e.target)) {
+  if (trRes && $("tripDestInput") && !$("tripDestInput").contains(e.target) && !trRes.contains(e.target) && $("tripPlanBtn") && !$("tripPlanBtn").contains(e.target)) {
     trRes.classList.add("hidden");
   }
 });
 
+let selectedTripDest = null;
 let tripSearchDebounceTimer = null;
-async function doTripDestSearch() {
+
+async function doTripDestSearch(autoCommit = false) {
   const q = $("tripDestInput").value.trim();
   const resEl = $("tripSearchResults");
   if (!resEl) return;
@@ -357,22 +384,103 @@ async function doTripDestSearch() {
     resEl.classList.add("hidden");
     return;
   }
+
+  // 1. Direct coordinates parsing: e.g. "49.163, -123.137"
+  const coordMatch = q.match(/^(-?\d+(?:\.\d+)?)[,\s]+(-?\d+(?:\.\d+)?)$/);
+  if (coordMatch) {
+    const lat = parseFloat(coordMatch[1]);
+    const lng = parseFloat(coordMatch[2]);
+    if (lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
+      selectedTripDest = {
+        lat,
+        lng,
+        title: `${fmtCoord(lat)}, ${fmtCoord(lng)}`,
+        label: `Coordinates (${fmtCoord(lat)}, ${fmtCoord(lng)})`,
+      };
+      if (autoCommit) {
+        resEl.classList.add("hidden");
+        planTrip();
+        return;
+      }
+      resEl.classList.remove("hidden");
+      resEl.innerHTML = `
+        <div class="res" data-lat="${lat}" data-lng="${lng}" data-title="${fmtCoord(lat)}, ${fmtCoord(lng)}" data-label="Coordinates (${fmtCoord(lat)}, ${fmtCoord(lng)})">
+          <span class="res-title">Coordinates: ${fmtCoord(lat)}, ${fmtCoord(lng)}</span>
+          <span class="res-sub">Exact latitude & longitude</span>
+        </div>`;
+      resEl.querySelector(".res").addEventListener("click", () => {
+        $("tripDestInput").value = `${fmtCoord(lat)}, ${fmtCoord(lng)}`;
+        resEl.classList.add("hidden");
+        planTrip();
+      });
+      return;
+    }
+  }
+
+  // 2. If autoCommit and results are already displayed, select the top one
+  if (autoCommit) {
+    const firstRes = resEl.querySelector(".res:not(.muted)");
+    if (firstRes && firstRes.dataset.lat) {
+      selectedTripDest = {
+        lat: +firstRes.dataset.lat,
+        lng: +firstRes.dataset.lng,
+        title: firstRes.dataset.title,
+        label: firstRes.dataset.label,
+      };
+      $("tripDestInput").value = firstRes.dataset.title || firstRes.dataset.label.split(",")[0];
+      resEl.classList.add("hidden");
+      planTrip();
+      return;
+    }
+  }
+
   resEl.classList.remove("hidden");
-  resEl.innerHTML = `<div class="res muted">Searching…</div>`;
+  resEl.innerHTML = `<div class="res muted">Searching nearby & global places…</div>`;
 
   try {
-    const d = await api("/api/geocode", { q });
+    const d = await api("/api/geocode", {
+      q,
+      lat: state.target.lat,
+      lng: state.target.lng,
+    });
     if (!d.results || !d.results.length) {
       resEl.innerHTML = `<div class="res muted">No places found</div>`;
       return;
     }
+
+    if (autoCommit) {
+      const top = d.results[0];
+      selectedTripDest = {
+        lat: top.lat,
+        lng: top.lng,
+        title: top.title,
+        label: top.label,
+      };
+      $("tripDestInput").value = top.title || top.label.split(",")[0];
+      resEl.classList.add("hidden");
+      planTrip();
+      return;
+    }
+
     resEl.innerHTML = d.results
-      .map((r) => `<div class="res" data-lat="${r.lat}" data-lng="${r.lng}" data-label="${r.label.replace(/"/g, '&quot;')}">${r.label}</div>`)
+      .map(
+        (r, i) => `
+        <div class="res" data-i="${i}" data-lat="${r.lat}" data-lng="${r.lng}" data-title="${(r.title || '').replace(/"/g, '&quot;')}" data-label="${(r.label || '').replace(/"/g, '&quot;')}">
+          <span class="res-title">${r.title}</span>
+          <span class="res-sub">${r.subtitle || r.label}</span>
+        </div>`
+      )
       .join("");
 
     resEl.querySelectorAll(".res").forEach((el) => {
       el.addEventListener("click", () => {
-        $("tripDestInput").value = el.dataset.label.split(",")[0];
+        selectedTripDest = {
+          lat: +el.dataset.lat,
+          lng: +el.dataset.lng,
+          title: el.dataset.title,
+          label: el.dataset.label,
+        };
+        $("tripDestInput").value = el.dataset.title || el.dataset.label.split(",")[0];
         resEl.classList.add("hidden");
         planTrip();
       });
@@ -384,10 +492,11 @@ async function doTripDestSearch() {
 
 if ($("tripDestInput")) {
   $("tripDestInput").addEventListener("input", () => {
+    selectedTripDest = null;
     clearTimeout(tripSearchDebounceTimer);
     const q = $("tripDestInput").value.trim();
     if (q.length >= 2) {
-      tripSearchDebounceTimer = setTimeout(doTripDestSearch, 200);
+      tripSearchDebounceTimer = setTimeout(() => doTripDestSearch(false), 200);
     } else if ($("tripSearchResults")) {
       $("tripSearchResults").classList.add("hidden");
     }
@@ -396,7 +505,24 @@ if ($("tripDestInput")) {
   $("tripDestInput").addEventListener("keydown", (e) => {
     if (e.key === "Enter") {
       e.preventDefault();
-      if ($("tripSearchResults")) $("tripSearchResults").classList.add("hidden");
+      clearTimeout(tripSearchDebounceTimer);
+      const q = $("tripDestInput").value.trim();
+      if (q.length >= 2 && !selectedTripDest) {
+        doTripDestSearch(true);
+      } else {
+        planTrip();
+      }
+    }
+  });
+}
+
+if ($("tripPlanBtn")) {
+  $("tripPlanBtn").addEventListener("click", () => {
+    clearTimeout(tripSearchDebounceTimer);
+    const q = $("tripDestInput") ? $("tripDestInput").value.trim() : "";
+    if (q.length >= 2 && !selectedTripDest) {
+      doTripDestSearch(true);
+    } else {
       planTrip();
     }
   });
@@ -577,8 +703,6 @@ document.querySelectorAll("#tripProfiles .chip, #tripProfiles .seg-btn").forEach
       x.classList.toggle("on", x === c));
   }));
 
-$("tripPlanBtn").addEventListener("click", planTrip);
-$("tripDestInput").addEventListener("keydown", (e) => e.key === "Enter" && planTrip());
 $("tripFactorInput").addEventListener("input", () => {
   updateTripEta();
   if (typeof updateControlButtons === "function") updateControlButtons();
@@ -650,12 +774,43 @@ function updateTripEta() {
 async function planTrip() {
   const dest = $("tripDestInput").value.trim();
   const gmaps = $("gmapsInput").value.trim();
-  if (!dest && !gmaps) { toast("Type a destination or paste a Google Maps link.", "error"); return; }
+  if (!dest && !gmaps) {
+    toast("Type a destination or paste a Google Maps link.", "error");
+    return;
+  }
+
+  let toPayload = null;
+  if (dest) {
+    const coordMatch = dest.match(/^(-?\d+(?:\.\d+)?)[,\s]+(-?\d+(?:\.\d+)?)$/);
+    if (coordMatch) {
+      const lat = parseFloat(coordMatch[1]);
+      const lng = parseFloat(coordMatch[2]);
+      if (lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
+        toPayload = {
+          lat,
+          lng,
+          name: `${fmtCoord(lat)}, ${fmtCoord(lng)}`,
+        };
+      }
+    }
+    if (!toPayload && selectedTripDest && selectedTripDest.lat != null && selectedTripDest.lng != null) {
+      toPayload = {
+        lat: selectedTripDest.lat,
+        lng: selectedTripDest.lng,
+        name: selectedTripDest.title || selectedTripDest.label || dest,
+      };
+    }
+    if (!toPayload) {
+      toPayload = { name: dest };
+    }
+  }
+
   const body = {
     profile: state.tripProfile,
-    to: dest ? { name: dest } : null,
-    gmaps_url: gmaps || null,
+    to: toPayload,
+    from: { lat: state.target.lat, lng: state.target.lng },
     start: { lat: state.target.lat, lng: state.target.lng },
+    gmaps_url: gmaps || null,
   };
   $("tripSummary").classList.remove("hidden");
   $("tripSummary").innerHTML = "Planning route…";

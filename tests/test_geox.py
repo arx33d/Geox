@@ -79,6 +79,36 @@ class TestRouter(unittest.TestCase):
         self.assertEqual(dest["lat"], 40.7829)
         self.assertEqual(profile, "car")
 
+    def test_parse_trip_input_start_fallback_and_coords(self):
+        payload = {
+            "start": {"lat": 40.7128, "lng": -74.0060},
+            "to": {"lat": 40.7829, "lng": -73.9654, "name": "Central Park"},
+            "profile": "car",
+        }
+        origin, dest, label, profile = parse_trip_input(payload)
+        self.assertEqual(origin["lat"], 40.7128)
+        self.assertEqual(dest["lat"], 40.7829)
+        self.assertEqual(label, "Central Park")
+        self.assertEqual(profile, "car")
+
+    def test_parse_trip_input_string_coords(self):
+        payload = {
+            "start": {"lat": 40.7128, "lng": -74.0060},
+            "to": "40.7829, -73.9654",
+            "profile": "bike",
+        }
+        origin, dest, label, profile = parse_trip_input(payload)
+        self.assertEqual(origin["lat"], 40.7128)
+        self.assertEqual(dest["lat"], 40.7829)
+        self.assertEqual(profile, "bike")
+
+    def test_haversine_distance(self):
+        from geox.server import haversine_km
+        dist = haversine_km(49.2827, -123.1207, 49.1666, -123.1336)
+        self.assertTrue(10 < dist < 20)
+        dist_far = haversine_km(49.2827, -123.1207, 37.5407, -77.4360)
+        self.assertTrue(3500 < dist_far < 4200)
+
 
 class TestServerAPI(unittest.TestCase):
     @classmethod
