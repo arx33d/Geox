@@ -75,7 +75,7 @@ def get_storage_stats() -> dict[str, Any]:
 def clear_cache() -> dict[str, Any]:
     """Clear all downloaded map tiles from disk."""
     if os.path.exists(TILES_DIR):
-        shutil.rmtree(TILES_DIR)
+        shutil.rmtree(TILES_DIR, ignore_errors=True)
     os.makedirs(TILES_DIR, exist_ok=True)
     return {"ok": True, "message": "Offline map cache cleared."}
 

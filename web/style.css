@@ -881,6 +881,20 @@ label.optlabel {
   border-bottom-left-radius: 16px;
   border-bottom-right-radius: 16px;
 }
+.modal-footer .btn {
+  height: 34px;
+  min-height: 34px;
+  max-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  padding: 0 16px;
+  font-size: 12.5px;
+  line-height: 1;
+  width: auto;
+  border-radius: var(--radius-sm);
+}
 
 /* ------------------------------------------------------------- offline UI */
 .offline-storage-box {
