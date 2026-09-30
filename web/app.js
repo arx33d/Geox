@@ -227,42 +227,112 @@ async function reverseGeocode() {
   } catch { /* offline is fine */ }
 }
 
-async function doSearch() {
+let searchDebounceTimer = null;
+
+async function doSearch(autoCommit = false) {
   const q = $("searchInput").value.trim();
-  if (q.length < 2) return;
+  if (q.length < 2) {
+    $("searchResults").classList.add("hidden");
+    return;
+  }
+
+  // 1. Direct coordinates parsing: e.g. "48.8566, 2.3522" or "40.7128 -74.0060"
+  const coordMatch = q.match(/^(-?\d+(?:\.\d+)?)[,\s]+(-?\d+(?:\.\d+)?)$/);
+  if (coordMatch) {
+    const lat = parseFloat(coordMatch[1]);
+    const lng = parseFloat(coordMatch[2]);
+    if (lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
+      const coordLabel = `Coordinates (${fmtCoord(lat)}, ${fmtCoord(lng)})`;
+      if (autoCommit) {
+        setTarget(lat, lng, coordLabel);
+        $("searchResults").classList.add("hidden");
+        toast(`Set destination to ${fmtCoord(lat)}, ${fmtCoord(lng)}`, "ok");
+        return;
+      }
+      $("searchResults").classList.remove("hidden");
+      $("searchResults").innerHTML = `<div class="res" data-lat="${lat}" data-lng="${lng}" data-label="${coordLabel}"><b>Coordinates:</b> ${fmtCoord(lat)}, ${fmtCoord(lng)}</div>`;
+      $("searchResults").querySelector(".res").addEventListener("click", () => {
+        setTarget(lat, lng, coordLabel);
+        $("searchResults").classList.add("hidden");
+      });
+      return;
+    }
+  }
+
+  // 2. If autoCommit and results are already displayed, select the top one
+  if (autoCommit) {
+    const firstRes = $("searchResults").querySelector(".res:not(.muted)");
+    if (firstRes && firstRes.dataset.lat) {
+      setTarget(+firstRes.dataset.lat, +firstRes.dataset.lng, firstRes.dataset.label);
+      $("searchResults").classList.add("hidden");
+      $("searchInput").value = firstRes.dataset.label.split(",")[0];
+      toast(`Navigated to ${firstRes.dataset.label.split(",")[0]}`, "ok");
+      return;
+    }
+  }
+
   $("searchResults").classList.remove("hidden");
   $("searchResults").innerHTML = `<div class="res muted">Searching…</div>`;
+
   try {
     const d = await api("/api/geocode", { q });
-    if (!d.results.length) { $("searchResults").innerHTML = `<div class="res">No results</div>`; return; }
+    if (!d.results || !d.results.length) {
+      $("searchResults").innerHTML = `<div class="res muted">No locations found</div>`;
+      return;
+    }
+
+    if (autoCommit) {
+      const top = d.results[0];
+      setTarget(top.lat, top.lng, top.label);
+      $("searchResults").classList.add("hidden");
+      $("searchInput").value = top.label.split(",")[0];
+      toast(`Navigated to ${top.label.split(",")[0]}`, "ok");
+      return;
+    }
+
     $("searchResults").innerHTML = d.results
-      .map((r, i) => `<div class="res" data-i="${i}">${r.label}</div>`).join("");
+      .map((r, i) => `<div class="res" data-i="${i}" data-lat="${r.lat}" data-lng="${r.lng}" data-label="${r.label.replace(/"/g, '&quot;')}">${r.label}</div>`).join("");
+
     $("searchResults").querySelectorAll(".res").forEach((el) => {
       el.addEventListener("click", () => {
-        const r = d.results[+el.dataset.i];
-        setTarget(r.lat, r.lng, r.label);
+        const lat = +el.dataset.lat;
+        const lng = +el.dataset.lng;
+        const label = el.dataset.label;
+        setTarget(lat, lng, label);
         $("searchResults").classList.add("hidden");
+        $("searchInput").value = label.split(",")[0];
       });
     });
   } catch (e) {
-    $("searchResults").innerHTML = `<div class="res">${e.message}</div>`;
+    $("searchResults").innerHTML = `<div class="res muted">${e.message}</div>`;
   }
 }
-$("searchBtn").addEventListener("click", doSearch);
-$("searchInput").addEventListener("keydown", (e) => e.key === "Enter" && doSearch());
-let searchDebounceTimer = null;
+
+// Live suggestions as you type (starting at 2 chars with snappy 200ms debounce)
 $("searchInput").addEventListener("input", () => {
   clearTimeout(searchDebounceTimer);
   const q = $("searchInput").value.trim();
-  if (q.length >= 3) {
-    searchDebounceTimer = setTimeout(doSearch, 400);
-  } else if (q.length === 0) {
+  if (q.length >= 2) {
+    searchDebounceTimer = setTimeout(() => doSearch(false), 200);
+  } else {
     $("searchResults").classList.add("hidden");
   }
 });
+
+// "Go" button & Enter key immediately commits search / jumps to destination
+$("searchBtn").addEventListener("click", () => doSearch(true));
+$("searchInput").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") {
+    e.preventDefault();
+    doSearch(true);
+  }
+});
+
+// Dismiss dropdown when clicking outside
 document.addEventListener("click", (e) => {
-  if (!$("searchInput").contains(e.target) && !$("searchResults").contains(e.target))
+  if (!$("searchInput").contains(e.target) && !$("searchResults").contains(e.target) && !$("searchBtn").contains(e.target)) {
     $("searchResults").classList.add("hidden");
+  }
 });
 
 const PRESETS = [
@@ -605,10 +675,10 @@ function renderDevices() {
       </div>
       <div class="dbadges">${deviceBadges(d)}</div>
       ${d.notes && d.notes.length && d.notes[0] !== "Ready"
-        ? `<div class="muted small" style="margin-top:5px">${d.notes.join(" · ")}</div>` : ""}
+      ? `<div class="muted small" style="margin-top:5px">${d.notes.join(" · ")}</div>` : ""}
       ${d.platform === "android" && d.adb_status === "device" &&
-        (!d.bridge || !d.bridge.installed || !d.bridge.mock_allowed)
-        ? `<div class="row"><button class="btn small" data-setup="${d.id}">Setup bridge</button></div>` : ""}
+      (!d.bridge || !d.bridge.installed || !d.bridge.mock_allowed)
+      ? `<div class="row"><button class="btn small" data-setup="${d.id}">Setup bridge</button></div>` : ""}
     </div>`).join("");
   el.querySelectorAll(".dev").forEach((el) =>
     el.addEventListener("click", () => {

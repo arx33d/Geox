@@ -1,363 +1,387 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Geox — GPS Spoofer</title>
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-<link rel="stylesheet" href="style.css">
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Geox</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <link rel="stylesheet" href="style.css">
 </head>
+
 <body>
-<header>
-  <div class="logo-wrap">
-    <div class="logo">GEOX</div>
-  </div>
-  <span class="spacer"></span>
-  <div class="header-right">
-    <div class="pills" id="capPills"></div>
-    <button id="settingsBtn" class="btn-icon" title="Preferences & Parameters" aria-label="Settings">
-      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <circle cx="12" cy="12" r="3"></circle>
-        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
-      </svg>
-    </button>
-  </div>
-</header>
-
-<main>
-  <aside id="panel">
-
-    <!-- Step 1: Device -->
-    <section class="card">
-      <div class="card-head">
-        <div class="card-title">
-          <span class="step-num">1</span>
-          <span>Target Device</span>
-        </div>
-      </div>
-      <div id="deviceList" class="devlist"><div class="empty">Scanning for phones…</div></div>
-      <div class="row btn-row" style="margin-top:12px;">
-        <button id="refreshBtn" class="btn small ghost">Refresh</button>
-        <button id="installAdbBtn" class="btn small ghost hidden">Install ADB</button>
-        <button id="devModeBtn" class="btn small ghost hidden">Enable Dev Mode</button>
-      </div>
-    </section>
-
-    <!-- Step 2: Destination -->
-    <section class="card">
-      <div class="card-head">
-        <div class="card-title">
-          <span class="step-num">2</span>
-          <span id="destHeadingText">Destination</span>
-        </div>
-      </div>
-
-      <div class="search-box">
-        <input id="searchInput" type="text" placeholder="Search address, landmark, coordinates…">
-        <button id="searchBtn" class="btn-inside">Go</button>
-      </div>
-      <div id="searchResults" class="results hidden"></div>
-
-      <div class="row" style="margin-top:10px;">
-        <select id="presetSelect" class="btn-select">
-          <option value="" disabled selected>Quick presets (Vancouver, Tokyo, Paris…)</option>
-        </select>
-        <button id="liveLocBtn" class="btn small ghost hidden" style="flex:0 0 auto;" title="Use my real live location">My Location</button>
-      </div>
-
-      <div class="coords-grid" style="margin-top:10px;">
-        <div class="coord-field">
-          <span class="coord-tag">LAT</span>
-          <input id="latInput" type="number" step="0.00001" placeholder="40.71280">
-        </div>
-        <div class="coord-field">
-          <span class="coord-tag">LNG</span>
-          <input id="lngInput" type="number" step="0.00001" placeholder="-74.00600">
-        </div>
-        <button id="copyCoordsBtn" class="btn-copy" title="Copy coordinates">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
-        </button>
-      </div>
-
-      <div id="placeLabel" class="place-label"></div>
-    </section>
-
-    <!-- Step 3: Movement -->
-    <section class="card">
-      <div class="card-head">
-        <div class="card-title">
-          <span class="step-num">3</span>
-          <span>Movement Pattern</span>
-        </div>
-      </div>
-
-      <div class="segmented-control" id="modeChips">
-        <button class="seg-btn on" data-mode="fixed">Stay</button>
-        <button class="seg-btn" data-mode="jitter">Roam</button>
-        <button class="seg-btn" data-mode="custom">Draw</button>
-        <button class="seg-btn" data-mode="trip">Trip</button>
-      </div>
-
-      <!-- Roam Options -->
-      <div id="roamOpts" class="optrow hidden">
-        <div class="optgrid">
-          <div>
-            <label class="optlabel">WANDER RADIUS (M)</label>
-            <input id="radiusInput" type="number" value="120" min="15" max="2000">
-          </div>
-          <div>
-            <label class="optlabel">WALKING SPEED (KM/H)</label>
-            <input id="roamSpeedInput" type="number" value="4.5" min="0.5" max="30" step="0.5">
-          </div>
-        </div>
-        <div class="hint">Simulates realistic pedestrian wander around the pin.</div>
-      </div>
-
-      <!-- Custom Draw Options -->
-      <div id="customOpts" class="optrow hidden">
-        <div class="hint">Click the map to add ordered waypoints.</div>
-        <div class="optgrid" style="margin-top:10px;">
-          <div>
-            <label class="optlabel">SPEED (KM/H)</label>
-            <input id="customSpeedInput" type="number" value="12" min="0.5" max="200" step="0.5">
-          </div>
-          <div>
-            <label class="optlabel">BEHAVIOR</label>
-            <select id="customLoop" class="btn-select">
-              <option value="false">One-way — park at end</option>
-              <option value="true">Loop route</option>
-            </select>
-          </div>
-        </div>
-        <div id="wpList"></div>
-        <div class="row" style="margin-top:10px;">
-          <button id="clearWpsBtn" class="btn small ghost">Clear waypoints</button>
-        </div>
-      </div>
-
-      <!-- Trip Options -->
-      <div id="tripOpts" class="optrow hidden">
-        <label class="optlabel">DESTINATION</label>
-        <div class="search-box" style="margin-top:4px;">
-          <input id="tripDestInput" type="text" placeholder="Enter destination city, street, place…">
-          <button id="tripPlanBtn" class="btn-inside">Plan</button>
-        </div>
-
-        <div class="segmented-control mini" id="tripProfiles" style="margin-top:10px;">
-          <button class="seg-btn on" data-profile="car">Car</button>
-          <button class="seg-btn" data-profile="bike">Bike</button>
-          <button class="seg-btn" data-profile="walk">Walk</button>
-          <button class="seg-btn" data-profile="transit">Transit</button>
-        </div>
-
-        <label class="optlabel" style="margin-top:12px;">GOOGLE MAPS LINK (OPTIONAL)</label>
-        <input id="gmapsInput" type="text" placeholder="https://www.google.com/maps/dir/…" style="margin-top:4px;">
-
-        <div class="optgrid" style="margin-top:10px;">
-          <div>
-            <label class="optlabel">SPEED FACTOR</label>
-            <input id="tripFactorInput" type="number" value="1" min="0.1" max="20" step="0.1">
-          </div>
-          <div>
-            <label class="optlabel">ESTIMATED TIME</label>
-            <input id="tripEta" type="text" value="Plan a route first" disabled>
-          </div>
-        </div>
-
-        <div id="tripRoutesList" class="chips hidden" style="margin-top:10px;"></div>
-        <div id="tripSummary" class="tripsummary hidden" style="margin-top:10px;"></div>
-        <div class="hint" id="tripHint" style="margin-top:8px;">
-          Starting location is based on your map pin or live location.
-        </div>
-      </div>
-    </section>
-
-    <!-- Step 4: Control -->
-    <section class="card">
-      <div class="card-head">
-        <div class="card-title">
-          <span class="step-num">4</span>
-          <span>Simulation Control</span>
-        </div>
-      </div>
-
-      <div class="row duration-row" style="margin-bottom:12px;align-items:center;">
-        <label class="optlabel" style="margin:0;flex:1;">GPX Playback Duration</label>
-        <select id="durationSelect" class="btn-select" style="flex:1.2;">
-          <option value="auto" selected>Auto (Trip / 8h)</option>
-          <option value="0.5">30 minutes</option>
-          <option value="1">1 hour</option>
-          <option value="2">2 hours</option>
-          <option value="4">4 hours</option>
-          <option value="8">8 hours</option>
-          <option value="12">12 hours</option>
-          <option value="24">24 hours</option>
-        </select>
-      </div>
-
-      <button id="startBtn" class="btn primary">START SPOOFING</button>
-
-      <div id="activeControls" class="active-controls hidden" style="margin-top:10px;">
-        <button id="autoSwapBtn" class="btn swap hidden" title="Instantly switch to the new selected location with zero delay or real GPS fallback">Auto Swap</button>
-        <button id="stopBtn" class="btn danger">STOP — restore real GPS</button>
-      </div>
-
-      <div id="sessionCard" class="session hidden"></div>
-    </section>
-
-    <!-- Step 5: System Log Drawer -->
-    <section class="card log-card">
-      <div id="logToggle" class="log-header">
-        <span class="card-title" style="font-size:11px;">System Log</span>
-        <span id="logChevron" class="chevron">▼</span>
-      </div>
-      <div id="logWrapper" style="margin-top:10px;">
-        <div id="log" class="log"></div>
-      </div>
-    </section>
-
-  </aside>
-  <div id="map"></div>
-</main>
-
-<!-- Settings Modal -->
-<div id="settingsModal" class="modal-backdrop hidden">
-  <div class="modal-card">
-    <div class="modal-head">
-      <div class="modal-title">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <header>
+    <div class="logo-wrap">
+      <div class="logo">GEOX</div>
+    </div>
+    <span class="spacer"></span>
+    <div class="header-right">
+      <div class="pills" id="capPills"></div>
+      <button id="settingsBtn" class="btn-icon" title="Preferences & Parameters" aria-label="Settings">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+          stroke-linecap="round" stroke-linejoin="round">
           <circle cx="12" cy="12" r="3"></circle>
-          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
-        </svg>
-        <span>Preferences & Parameters</span>
-      </div>
-      <button id="closeSettingsBtn" class="btn-close" title="Close">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <line x1="18" y1="6" x2="6" y2="18"></line>
-          <line x1="6" y1="6" x2="18" y2="18"></line>
+          <path
+            d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z">
+          </path>
         </svg>
       </button>
     </div>
+  </header>
 
-    <div class="settings-tabs" id="settingsTabButtons">
-      <button class="settings-tab-btn on" data-target="tabMap">Map & View</button>
-      <button class="settings-tab-btn" data-target="tabUnits">Units & HUD</button>
-      <button class="settings-tab-btn" data-target="tabDefaults">Movement</button>
-    </div>
+  <main>
+    <aside id="panel">
 
-    <div class="modal-body">
-      <!-- Tab 1: Map & View -->
-      <div id="tabMap" class="tab-content">
-        <div class="setting-item">
-          <div class="setting-info">
-            <label class="setting-label">Map Style</label>
-            <div class="setting-desc">Base tile layer used across map views.</div>
+      <!-- Step 1: Device -->
+      <section class="card">
+        <div class="card-head">
+          <div class="card-title">
+            <span class="step-num">1</span>
+            <span>Target Device</span>
           </div>
-          <select id="settingMapTheme" class="btn-select" style="max-width: 220px;">
-            <option value="esri-dark">Dark Canvas (Default)</option>
-            <option value="esri-satellite">Satellite Imagery</option>
-            <option value="esri-streets">Streets & Navigation</option>
-            <option value="esri-topo">Topographic Map</option>
-            <option value="esri-light">Light Canvas</option>
+        </div>
+        <div id="deviceList" class="devlist">
+          <div class="empty">Scanning for phones…</div>
+        </div>
+        <div class="row btn-row" style="margin-top:12px;">
+          <button id="refreshBtn" class="btn small ghost">Refresh</button>
+          <button id="installAdbBtn" class="btn small ghost hidden">Install ADB</button>
+          <button id="devModeBtn" class="btn small ghost hidden">Enable Dev Mode</button>
+        </div>
+      </section>
+
+      <!-- Step 2: Destination -->
+      <section class="card">
+        <div class="card-head">
+          <div class="card-title">
+            <span class="step-num">2</span>
+            <span id="destHeadingText">Destination</span>
+          </div>
+        </div>
+
+        <div class="search-container">
+          <div class="search-box">
+            <input id="searchInput" type="text" placeholder="Search address, landmark, coordinates…">
+            <button id="searchBtn" class="btn-inside">Go</button>
+          </div>
+          <div id="searchResults" class="results hidden"></div>
+        </div>
+
+        <div class="row" style="margin-top:10px;">
+          <select id="presetSelect" class="btn-select">
+            <option value="" disabled selected>Quick presets (Vancouver, Tokyo, Paris…)</option>
+          </select>
+          <button id="liveLocBtn" class="btn small ghost hidden" style="flex:0 0 auto;"
+            title="Use my real live location">My Location</button>
+        </div>
+
+        <div class="coords-grid" style="margin-top:10px;">
+          <div class="coord-field">
+            <span class="coord-tag">LAT</span>
+            <input id="latInput" type="number" step="0.00001" placeholder="40.71280">
+          </div>
+          <div class="coord-field">
+            <span class="coord-tag">LNG</span>
+            <input id="lngInput" type="number" step="0.00001" placeholder="-74.00600">
+          </div>
+          <button id="copyCoordsBtn" class="btn-copy" title="Copy coordinates">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              stroke-linecap="round" stroke-linejoin="round">
+              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+            </svg>
+          </button>
+        </div>
+
+        <div id="placeLabel" class="place-label"></div>
+      </section>
+
+      <!-- Step 3: Movement -->
+      <section class="card">
+        <div class="card-head">
+          <div class="card-title">
+            <span class="step-num">3</span>
+            <span>Movement Pattern</span>
+          </div>
+        </div>
+
+        <div class="segmented-control" id="modeChips">
+          <button class="seg-btn on" data-mode="fixed">Stay</button>
+          <button class="seg-btn" data-mode="jitter">Roam</button>
+          <button class="seg-btn" data-mode="custom">Draw</button>
+          <button class="seg-btn" data-mode="trip">Trip</button>
+        </div>
+
+        <!-- Roam Options -->
+        <div id="roamOpts" class="optrow hidden">
+          <div class="optgrid">
+            <div>
+              <label class="optlabel">WANDER RADIUS (M)</label>
+              <input id="radiusInput" type="number" value="120" min="15" max="2000">
+            </div>
+            <div>
+              <label class="optlabel">WALKING SPEED (KM/H)</label>
+              <input id="roamSpeedInput" type="number" value="4.5" min="0.5" max="30" step="0.5">
+            </div>
+          </div>
+          <div class="hint">Simulates realistic pedestrian wander around the pin.</div>
+        </div>
+
+        <!-- Custom Draw Options -->
+        <div id="customOpts" class="optrow hidden">
+          <div class="hint">Click the map to add ordered waypoints.</div>
+          <div class="optgrid" style="margin-top:10px;">
+            <div>
+              <label class="optlabel">SPEED (KM/H)</label>
+              <input id="customSpeedInput" type="number" value="12" min="0.5" max="200" step="0.5">
+            </div>
+            <div>
+              <label class="optlabel">BEHAVIOR</label>
+              <select id="customLoop" class="btn-select">
+                <option value="false">One-way — park at end</option>
+                <option value="true">Loop route</option>
+              </select>
+            </div>
+          </div>
+          <div id="wpList"></div>
+          <div class="row" style="margin-top:10px;">
+            <button id="clearWpsBtn" class="btn small ghost">Clear waypoints</button>
+          </div>
+        </div>
+
+        <!-- Trip Options -->
+        <div id="tripOpts" class="optrow hidden">
+          <label class="optlabel">DESTINATION</label>
+          <div class="search-box" style="margin-top:4px;">
+            <input id="tripDestInput" type="text" placeholder="Enter destination city, street, place…">
+            <button id="tripPlanBtn" class="btn-inside">Plan</button>
+          </div>
+
+          <div class="segmented-control mini" id="tripProfiles" style="margin-top:10px;">
+            <button class="seg-btn on" data-profile="car">Car</button>
+            <button class="seg-btn" data-profile="bike">Bike</button>
+            <button class="seg-btn" data-profile="walk">Walk</button>
+            <button class="seg-btn" data-profile="transit">Transit</button>
+          </div>
+
+          <label class="optlabel" style="margin-top:12px;">GOOGLE MAPS LINK (OPTIONAL)</label>
+          <input id="gmapsInput" type="text" placeholder="https://www.google.com/maps/dir/…" style="margin-top:4px;">
+
+          <div class="optgrid" style="margin-top:10px;">
+            <div>
+              <label class="optlabel">SPEED FACTOR</label>
+              <input id="tripFactorInput" type="number" value="1" min="0.1" max="20" step="0.1">
+            </div>
+            <div>
+              <label class="optlabel">ESTIMATED TIME</label>
+              <input id="tripEta" type="text" value="Plan a route first" disabled>
+            </div>
+          </div>
+
+          <div id="tripRoutesList" class="chips hidden" style="margin-top:10px;"></div>
+          <div id="tripSummary" class="tripsummary hidden" style="margin-top:10px;"></div>
+          <div class="hint" id="tripHint" style="margin-top:8px;">
+            Starting location is based on your map pin or live location.
+          </div>
+        </div>
+      </section>
+
+      <!-- Step 4: Control -->
+      <section class="card">
+        <div class="card-head">
+          <div class="card-title">
+            <span class="step-num">4</span>
+            <span>Simulation Control</span>
+          </div>
+        </div>
+
+        <div class="row duration-row" style="margin-bottom:12px;align-items:center;">
+          <label class="optlabel" style="margin:0;flex:1;">GPX Playback Duration</label>
+          <select id="durationSelect" class="btn-select" style="flex:1.2;">
+            <option value="auto" selected>Auto (Trip / 8h)</option>
+            <option value="0.5">30 minutes</option>
+            <option value="1">1 hour</option>
+            <option value="2">2 hours</option>
+            <option value="4">4 hours</option>
+            <option value="8">8 hours</option>
+            <option value="12">12 hours</option>
+            <option value="24">24 hours</option>
           </select>
         </div>
 
-        <div class="setting-item">
-          <div class="setting-info">
-            <label class="setting-label">Auto-Center Map</label>
-            <div class="setting-desc">Pan map dynamically with vehicle movement in Trip mode.</div>
+        <button id="startBtn" class="btn primary">START SPOOFING</button>
+
+        <div id="activeControls" class="active-controls hidden" style="margin-top:10px;">
+          <button id="autoSwapBtn" class="btn swap hidden"
+            title="Instantly switch to the new selected location with zero delay or real GPS fallback">Auto
+            Swap</button>
+          <button id="stopBtn" class="btn danger">STOP — restore real GPS</button>
+        </div>
+
+        <div id="sessionCard" class="session hidden"></div>
+      </section>
+
+      <!-- Step 5: System Log Drawer -->
+      <section class="card log-card">
+        <div id="logToggle" class="log-header">
+          <span class="card-title" style="font-size:11px;">System Log</span>
+          <span id="logChevron" class="chevron">▼</span>
+        </div>
+        <div id="logWrapper" style="margin-top:10px;">
+          <div id="log" class="log"></div>
+        </div>
+      </section>
+
+    </aside>
+    <div id="map"></div>
+  </main>
+
+  <!-- Settings Modal -->
+  <div id="settingsModal" class="modal-backdrop hidden">
+    <div class="modal-card">
+      <div class="modal-head">
+        <div class="modal-title">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="3"></circle>
+            <path
+              d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z">
+            </path>
+          </svg>
+          <span>Preferences & Parameters</span>
+        </div>
+        <button id="closeSettingsBtn" class="btn-close" title="Close">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            stroke-linecap="round" stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+
+      <div class="settings-tabs" id="settingsTabButtons">
+        <button class="settings-tab-btn on" data-target="tabMap">Map & View</button>
+        <button class="settings-tab-btn" data-target="tabUnits">Units & HUD</button>
+        <button class="settings-tab-btn" data-target="tabDefaults">Movement</button>
+      </div>
+
+      <div class="modal-body">
+        <!-- Tab 1: Map & View -->
+        <div id="tabMap" class="tab-content">
+          <div class="setting-item">
+            <div class="setting-info">
+              <label class="setting-label">Map Style</label>
+              <div class="setting-desc">Base tile layer used across map views.</div>
+            </div>
+            <select id="settingMapTheme" class="btn-select" style="max-width: 220px;">
+              <option value="esri-dark">Dark Canvas (Default)</option>
+              <option value="esri-satellite">Satellite Imagery</option>
+              <option value="esri-streets">Streets & Navigation</option>
+              <option value="esri-topo">Topographic Map</option>
+              <option value="esri-light">Light Canvas</option>
+            </select>
           </div>
-          <label class="toggle-switch">
-            <input type="checkbox" id="settingAutoCenter" checked>
-            <span class="toggle-slider"></span>
-          </label>
+
+          <div class="setting-item">
+            <div class="setting-info">
+              <label class="setting-label">Auto-Center Map</label>
+              <div class="setting-desc">Pan map dynamically with vehicle movement in Trip mode.</div>
+            </div>
+            <label class="toggle-switch">
+              <input type="checkbox" id="settingAutoCenter" checked>
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Tab 2: Units & HUD -->
+        <div id="tabUnits" class="tab-content hidden">
+          <div class="setting-item">
+            <div class="setting-info">
+              <label class="setting-label">Speed & Distance Units</label>
+              <div class="setting-desc">Units formatted in telemetry HUD and summaries.</div>
+            </div>
+            <div class="segmented-control mini" id="settingUnitsControl" style="width: 200px;">
+              <button class="seg-btn on" data-val="metric">Metric (km)</button>
+              <button class="seg-btn" data-val="imperial">Imperial (mi)</button>
+            </div>
+          </div>
+
+          <div class="setting-item">
+            <div class="setting-info">
+              <label class="setting-label">Trip Telemetry HUD</label>
+              <div class="setting-desc">Show real-time speed and progress HUD overlay on the map.</div>
+            </div>
+            <label class="toggle-switch">
+              <input type="checkbox" id="settingShowHud" checked>
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+
+          <div class="setting-item">
+            <div class="setting-info">
+              <label class="setting-label">Polling Refresh Interval</label>
+              <div class="setting-desc">Device telemetry polling frequency while spoofing.</div>
+            </div>
+            <div class="segmented-control mini" id="settingPollInterval" style="width: 220px;">
+              <button class="seg-btn on" data-val="1000">1s High</button>
+              <button class="seg-btn" data-val="2500">2.5s Normal</button>
+              <button class="seg-btn" data-val="5000">5s Eco</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tab 3: Movement Defaults -->
+        <div id="tabDefaults" class="tab-content hidden">
+          <div class="setting-item">
+            <div class="setting-info">
+              <label class="setting-label">Default Roam Radius</label>
+              <div class="setting-desc">Starting wander boundary radius for Roam mode.</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <input type="number" id="settingDefaultRadius" min="15" max="2000" step="5" value="120"
+                style="width:85px;text-align:right;">
+              <span class="muted small">m</span>
+            </div>
+          </div>
+
+          <div class="setting-item">
+            <div class="setting-info">
+              <label class="setting-label">Default Roam Speed</label>
+              <div class="setting-desc">Initial walking speed for Roam wander simulation.</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <input type="number" id="settingDefaultRoamSpeed" min="0.5" max="30" step="0.5" value="4.5"
+                style="width:85px;text-align:right;">
+              <span class="muted small">km/h</span>
+            </div>
+          </div>
+
+          <div class="setting-item">
+            <div class="setting-info">
+              <label class="setting-label">Default Trip Speed Multiplier</label>
+              <div class="setting-desc">Road-speed scaling factor (1.0 = real speed limits).</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <input type="number" id="settingDefaultTripFactor" min="0.1" max="20" step="0.1" value="1.0"
+                style="width:85px;text-align:right;">
+              <span class="muted small">x</span>
+            </div>
+          </div>
         </div>
       </div>
 
-      <!-- Tab 2: Units & HUD -->
-      <div id="tabUnits" class="tab-content hidden">
-        <div class="setting-item">
-          <div class="setting-info">
-            <label class="setting-label">Speed & Distance Units</label>
-            <div class="setting-desc">Units formatted in telemetry HUD and summaries.</div>
-          </div>
-          <div class="segmented-control mini" id="settingUnitsControl" style="width: 200px;">
-            <button class="seg-btn on" data-val="metric">Metric (km)</button>
-            <button class="seg-btn" data-val="imperial">Imperial (mi)</button>
-          </div>
-        </div>
-
-        <div class="setting-item">
-          <div class="setting-info">
-            <label class="setting-label">Trip Telemetry HUD</label>
-            <div class="setting-desc">Show real-time speed and progress HUD overlay on the map.</div>
-          </div>
-          <label class="toggle-switch">
-            <input type="checkbox" id="settingShowHud" checked>
-            <span class="toggle-slider"></span>
-          </label>
-        </div>
-
-        <div class="setting-item">
-          <div class="setting-info">
-            <label class="setting-label">Polling Refresh Interval</label>
-            <div class="setting-desc">Device telemetry polling frequency while spoofing.</div>
-          </div>
-          <div class="segmented-control mini" id="settingPollInterval" style="width: 220px;">
-            <button class="seg-btn on" data-val="1000">1s High</button>
-            <button class="seg-btn" data-val="2500">2.5s Normal</button>
-            <button class="seg-btn" data-val="5000">5s Eco</button>
-          </div>
-        </div>
+      <div class="modal-footer">
+        <button id="resetSettingsBtn" class="btn small ghost">Reset Defaults</button>
+        <button id="saveSettingsBtn" class="btn primary small">Done</button>
       </div>
-
-      <!-- Tab 3: Movement Defaults -->
-      <div id="tabDefaults" class="tab-content hidden">
-        <div class="setting-item">
-          <div class="setting-info">
-            <label class="setting-label">Default Roam Radius</label>
-            <div class="setting-desc">Starting wander boundary radius for Roam mode.</div>
-          </div>
-          <div style="display:flex;align-items:center;gap:8px;">
-            <input type="number" id="settingDefaultRadius" min="15" max="2000" step="5" value="120" style="width:85px;text-align:right;">
-            <span class="muted small">m</span>
-          </div>
-        </div>
-
-        <div class="setting-item">
-          <div class="setting-info">
-            <label class="setting-label">Default Roam Speed</label>
-            <div class="setting-desc">Initial walking speed for Roam wander simulation.</div>
-          </div>
-          <div style="display:flex;align-items:center;gap:8px;">
-            <input type="number" id="settingDefaultRoamSpeed" min="0.5" max="30" step="0.5" value="4.5" style="width:85px;text-align:right;">
-            <span class="muted small">km/h</span>
-          </div>
-        </div>
-
-        <div class="setting-item">
-          <div class="setting-info">
-            <label class="setting-label">Default Trip Speed Multiplier</label>
-            <div class="setting-desc">Road-speed scaling factor (1.0 = real speed limits).</div>
-          </div>
-          <div style="display:flex;align-items:center;gap:8px;">
-            <input type="number" id="settingDefaultTripFactor" min="0.1" max="20" step="0.1" value="1.0" style="width:85px;text-align:right;">
-            <span class="muted small">x</span>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <div class="modal-footer">
-      <button id="resetSettingsBtn" class="btn small ghost">Reset Defaults</button>
-      <button id="saveSettingsBtn" class="btn primary small">Done</button>
     </div>
   </div>
-</div>
 
-<div id="toast"></div>
+  <div id="toast"></div>
 
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="app.js"></script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="app.js"></script>
 </body>
+
 </html>
