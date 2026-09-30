@@ -316,37 +316,51 @@ def _process_osrm_route(route, profile, route_id=0):
     real_duration_s = float(route.get("duration", 0))
 
     if len(durs) != len(coords) - 1 or not durs:
-        # router gave no per-edge annotation: fall back to one flat speed
+        # router gave no per-edge annotation: calculate per-edge duration proportional to physical distance
+        from .motion import haversine_m
+
         durs = []
         if distance_m > 0 and real_duration_s > 0:
-            step_m = distance_m / max(1, len(coords) - 1)
-            n = max(1, len(coords) - 1)
-            durs = [real_duration_s / n] * n
+            for i in range(len(coords) - 1):
+                seg_d = haversine_m(coords[i][0], coords[i][1], coords[i + 1][0], coords[i + 1][1])
+                seg_dur = max(0.01, (seg_d / distance_m) * real_duration_s)
+                durs.append(round(seg_dur, 3))
+        else:
+            durs = [1.0] * max(1, len(coords) - 1)
 
     if profile == "transit":
         # no free transit timetables: hold a transit-like average speed
         speed_mps = TRANSIT_AVG_KMH * 1000.0 / 3600.0
         real_duration_s = distance_m / speed_mps
+        from .motion import haversine_m
+
         durs = []
         if distance_m > 0:
-            n = max(1, len(coords) - 1)
-            durs = [real_duration_s / n] * n
+            for i in range(len(coords) - 1):
+                seg_d = haversine_m(coords[i][0], coords[i][1], coords[i + 1][0], coords[i + 1][1])
+                seg_dur = max(0.01, (seg_d / distance_m) * real_duration_s)
+                durs.append(round(seg_dur, 3))
+        else:
+            durs = [1.0] * max(1, len(coords) - 1)
 
-    # downsample: merge edges so the engine gets ~400 segments with the
-    # summed real travel time of everything merged away
-    n_edges = len(coords) - 1
-    step = max(1, n_edges // 400)
-    waypoints, seg_seconds = [coords[0]], []
-    acc = 0.0
-    for i in range(n_edges):
-        acc += durs[i]
-        if (i + 1) % step == 0 or i == n_edges - 1:
-            waypoints.append(coords[i + 1])
-            seg_seconds.append(round(acc, 3))
-            acc = 0.0
-    if waypoints[-1] != coords[-1]:
-        waypoints.append(coords[-1])
-        seg_seconds.append(0.001)
+    # 1:1 EXACT ROAD GEOMETRY: preserve 100% of all distinct road vertices from OSRM.
+    # No downsampling, no chording, no cutting across curves.
+    waypoints = [coords[0]]
+    seg_seconds = []
+    for i in range(len(coords) - 1):
+        pt_next = coords[i + 1]
+        dur_val = durs[i] if i < len(durs) else 0.1
+        # Eliminate only zero-distance identical adjacent points
+        if pt_next == waypoints[-1]:
+            if seg_seconds:
+                seg_seconds[-1] = round(seg_seconds[-1] + dur_val, 3)
+        else:
+            waypoints.append(pt_next)
+            seg_seconds.append(max(0.001, round(dur_val, 3)))
+
+    if len(waypoints) < 2:
+        waypoints = coords
+        seg_seconds = [max(0.001, round(d, 3)) for d in durs]
 
     speed_kmh = (distance_m / 1000.0) / (real_duration_s / 3600.0) if real_duration_s > 0 else 20.0
     summary = _extract_summary(route, route_id)
