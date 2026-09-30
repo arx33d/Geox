@@ -23,7 +23,8 @@ You are in Vancouver. Everyone checking your location sees you at McMurdo Statio
 ### Option A: Web UI
 ```
 1. Double-click  run_geox.bat          (or run ./run_geox.sh)
-2. The browser opens http://127.0.0.1:7876
+2. Pick "Web UI" in the launcher menu (arrow keys + Enter)
+3. The browser opens http://127.0.0.1:7876
 3. Plug the phone in with USB, unlock it, accept the trust prompt
 4. Refresh devices → select your phone
 5. Pick a destination, choose a movement mode, press START SPOOFING

@@ -8,11 +8,12 @@ Read the "Responsible use" section at the bottom before using this. It runs on y
 
 ```
 1. Double-click  run_geox.bat
-2. Your browser opens  http://127.0.0.1:7876
+2. Pick "Web UI" in the launcher menu (arrow keys + Enter)
+3. Your browser opens  http://127.0.0.1:7876
 3. Plug the phone in with USB, unlock it, accept the trust prompt
-4. Click "Refresh devices"  →  select your phone
-5. Pick a spot on the map (or search "McMurdo Station", or use a preset)
-6. Choose a movement mode  →  press  START SPOOFING
+5. Click "Refresh devices"  →  select your phone
+6. Pick a spot on the map (or search "McMurdo Station", or use a preset)
+7. Choose a movement mode  →  press  START SPOOFING
 ```
 
 ### CLI Mode (direct terminal usage)
