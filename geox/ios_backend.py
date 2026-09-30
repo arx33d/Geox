@@ -464,23 +464,67 @@ class IosCliSession:
         self.thread.start()
 
     def update(self, cfg):
-        """Seamlessly update GPX track and switch playback with zero downtime."""
+        """AutoSwap: jump to a new location without the real GPS ever showing.
+
+        Launches a second simulation process with the new track while the old
+        one keeps asserting, waits until the new process is provably asserting
+        (its "set location" log line), and only then retires the old process.
+        Both fake locations may briefly alternate, but the real one never wins.
+        """
         self.cfg = cfg
         self.motion = build_motion(cfg)
         if "lat" in cfg and "lng" in cfg:
             self.last = (float(cfg["lat"]), float(cfg["lng"]))
-        self._current_gpx_path = self._gpx_path(f"track-{int(time.time())}.gpx")
-        self._write_gpx(self._current_gpx_path)
-        self.engine.log(
-            f"[iOS17] AUTO SWAP -> {self.cfg.get('place') or ''} "
-            f"{self.last[0]:.5f}, {self.last[1]:.5f} (seamless transition)",
-            "good",
-        )
-        if self.proc and self.proc.poll() is None:
+        path = self._gpx_path(f"track-{int(time.time())}.gpx")
+        self._write_gpx(path)
+        self._current_gpx_path = path
+
+        new_proc = self._launch(gpx=path)
+        buf = []
+        pump = threading.Thread(target=self._pump, args=(new_proc, buf), daemon=True)
+        pump.start()
+        old_proc = self.proc
+
+        # wait for the first assertion from the new process (tunnel included)
+        deadline = time.time() + 120
+        confirmed = False
+        while time.time() < deadline:
+            if new_proc.poll() is not None:
+                break
+            if any("set location" in line.lower() for line in buf):
+                confirmed = True
+                break
+            time.sleep(0.25)
+
+        if not confirmed:
+            # the replacement failed: keep the running spoof untouched
             try:
-                self.proc.kill()
+                new_proc.kill()
             except Exception:
                 pass
+            output = _strip_ansi("\n".join(buf))
+            msg = _cli_failure_message(output) or (
+                "the replacement session could not establish a tunnel; "
+                "kept the current spoof"
+            )
+            self.engine.log(f"[iOS17] AutoSwap aborted, current spoof untouched: {msg}", "error")
+            return False
+
+        # the new process is asserting; retire the old one
+        self.proc = new_proc  # the watch loop now follows the new process
+        self._out = buf
+        if old_proc and old_proc.poll() is None:
+            try:
+                old_proc.kill()
+            except Exception:
+                pass
+        self.state = "active"
+        self.engine.log(
+            f"[iOS17] AUTO SWAP -> {self.cfg.get('place') or ''} "
+            f"{self.last[0]:.5f}, {self.last[1]:.5f} (seamless, real GPS never shown)",
+            "good",
+        )
+        return True
 
     def stop(self):
         self.stop_event.set()
@@ -499,11 +543,12 @@ class IosCliSession:
             "last": list(self.last),
         }
 
-    def _pump(self, proc):
+    def _pump(self, proc, buf=None):
+        out = buf if buf is not None else self._out
         for line in proc.stdout:
             line = line.strip()
             if line:
-                self._out.append(line)
+                out.append(line)
                 if "error" in line.lower() or "warning" in line.lower():
                     self.engine.log(f"[iOS17] {line[:220]}", "debug")
 

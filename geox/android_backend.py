@@ -265,7 +265,7 @@ class AndroidSession:
     def _run(self):
         tick = float(self.cfg.get("tick", 2.0))
         try:
-            motion = build_motion(self.cfg)
+            self.motion = build_motion(self.cfg)
             self._send(*self.last)
             self.state = "active"
             self.engine.log(
@@ -277,9 +277,10 @@ class AndroidSession:
                 time.sleep(0.2)
                 now = time.time()
                 if now - prev >= tick:
-                    lat, lng = motion.step(now - prev)
+                    # self.motion is read each tick so AutoSwap takes effect live
+                    lat, lng = self.motion.step(now - prev)
                     try:
-                        self._send(lat, lng, speed_mps=getattr(motion, "speed_mps", None))
+                        self._send(lat, lng, speed_mps=getattr(self.motion, "speed_mps", None))
                     except AndroidError as e:
                         self.error = str(e)
                         self.state = "failed"
