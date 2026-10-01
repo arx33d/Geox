@@ -1,11 +1,10 @@
 # Geox
 
-# Geox
-
 **Change the GPS location of a phone connected to your PC, and every app on it believes it.**
 Plug an iPhone or Android into the computer with a USB cable, pick any spot on a map, and the phone reports that location at operating-system level.
 
 [![License: MIT + Commons Clause](https://img.shields.io/badge/License-MIT_%2B_Commons_Clause-blue.svg)](LICENSE)
+
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)
 
 ![Geox](docs/screenshot.png)
