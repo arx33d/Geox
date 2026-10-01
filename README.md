@@ -76,7 +76,7 @@ The `run_geox.sh` file is only for macOS, Linux and Git Bash users. Windows user
 
 | Platform | Needed once |
 |---|---|
-| **iPhone** | Apple's USB drivers (the *Apple Devices* app from the Microsoft Store, or iTunes; Geox starts the service for you), *Trust this computer*, Developer Mode ON (Geox reveals the switch and walks you through it) |
+| **iPhone** | Apple's USB drivers (the *Apple Devices* app from the Microsoft Store, or iTunes; Geox starts the service for you), *Trust this computer*, Developer Mode ON (Geox reveals the switch and walks you through it). And VS community/professional/insider with the C++ module |
 | **Android** | USB debugging enabled; build the `Geox Bridge` app once from [`android-bridge/`](android-bridge) (about 10 minutes with Android Studio), then press *Setup bridge* and Geox installs and configures it by itself |
 
 ## How it works
