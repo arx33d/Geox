@@ -25,17 +25,27 @@ You are in Vancouver. Everyone checking your location sees you at McMurdo Statio
 - **Self-installing.** `run_geox.bat` needs no Python and no admin rights: the first run downloads everything automatically. Zip the folder and share it as-is.
 - **Self-healing sessions.** The fake fix is re-asserted every second, tunnel blips auto-reconnect, and a phone that drops off USB is waited for and resumed.
 
-## Quick start
+## Installation & Download for Windows
 
-### Option A: Web UI
+### Option 1: One-Click PowerShell Installer (Fastest)
+Open Windows PowerShell (or Terminal) and run:
+```powershell
+irm https://raw.githubusercontent.com/arx33d/Geox/main/install.ps1 | iex
 ```
-1. Double-click  run_geox.bat          (or run ./run_geox.sh)
-2. Pick "Web UI" in the launcher menu (arrow keys + Enter)
-3. The browser opens http://127.0.0.1:7876
-3. Plug the phone in with USB, unlock it, accept the trust prompt
-4. Refresh devices → select your phone
-5. Pick a destination, choose a movement mode, press START SPOOFING
-```
+This downloads Geox, sets up the private runtime, compiles `Geox.exe`, creates Desktop & Start Menu shortcuts, and launches the application automatically.
+
+### Option 2: Standalone Windows Installer (GeoxSetup.exe)
+1. Download `GeoxSetup.exe` from the latest release.
+2. Double-click `GeoxSetup.exe` and click **Install Geox**.
+3. It installs to `%LOCALAPPDATA%\Programs\Geox` and creates desktop shortcuts.
+
+### Option 3: Direct Native Executable (Geox.exe)
+If you downloaded or extracted the folder:
+1. Double-click **`Geox.exe`** (or `run_geox.bat`).
+2. Pick "Web UI" in the launcher menu (arrow keys + Enter).
+3. The browser opens `http://127.0.0.1:7876`.
+4. Plug the phone in with USB, unlock it, and accept the trust prompt.
+5. Select your phone, pick a destination, and press START SPOOFING.
 
 ### Option B: Command Line (CLI)
 You can run Geox directly from your terminal or command prompt (`cmd.exe`, PowerShell, or bash):

@@ -38,7 +38,7 @@ geox --stop             # Stop spoofing & restore real GPS
 geox --status           # Check active spoofing sessions
 ```
 
-`run_geox.bat` and `geox.bat` need nothing pre-installed: if Python is missing it downloads a private copy (about 11 MB) plus the app's dependencies automatically. To share Geox with someone, zip this folder and send it; the first run sets everything up (internet required).
+`Geox.exe`, `GeoxSetup.exe`, `install.ps1`, and `run_geox.bat` need nothing pre-installed: if Python is missing they download a private copy (about 11 MB) plus the app's dependencies automatically. For single-line setup, run `irm https://raw.githubusercontent.com/arx33d/Geox/main/install.ps1 | iex` in PowerShell or run `GeoxSetup.exe`. To share Geox with someone, zip this folder and send it; double-clicking `Geox.exe` runs everything automatically.
 
 Tip to never see a Windows security warning: before extracting the downloaded zip, right-click it, choose Properties, tick Unblock, then extract. No prompt at all, ever. Cloning the repo with git instead of downloading the zip also avoids it completely.
 
