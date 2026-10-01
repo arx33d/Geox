@@ -7,7 +7,6 @@ Plug an iPhone or Android into the computer with a USB cable, pick any spot on a
 
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)
 
-![Geox](docs/screenshot.png)
 
 Plug an iPhone or Android into the computer with a USB cable, pick any spot on a map, and the phone reports that location at operating-system level: Find My, Snap Map, Google Maps, WhatsApp live location, everything.
 
