@@ -296,17 +296,24 @@ def _run_cli(args, timeout=180):
     )
 
 
+_IMAGE_PREPARED = False
+
+
 def _prepare_developer_image(engine):
     """iOS 17+: make sure the personalized developer image is mounted."""
+    global _IMAGE_PREPARED
+    if _IMAGE_PREPARED:
+        return
     engine.log("[iOS] preparing the developer image (auto-mount, first time "
                "can take a minute)…")
     try:
-        p = _run_cli(["mounter", "auto-mount"], timeout=240)
+        p = _run_cli(["mounter", "auto-mount"], timeout=45)
     except Exception as e:
         engine.log(f"[iOS] auto-mount could not run: {e}", "warn")
         return
     out = (p.stdout or "") + (p.stderr or "")
-    if p.returncode == 0:
+    if p.returncode == 0 or "already mounted" in out.lower():
+        _IMAGE_PREPARED = True
         engine.log("[iOS] developer image mounted.", "good")
     else:
         engine.log(f"[iOS] auto-mount skipped: {_cli_failure_message(out) or out.strip()[-200:]}", "warn")
@@ -654,7 +661,7 @@ class IosCliSession:
             while time.time() < deadline:
                 if new_proc.poll() is not None:
                     break
-                if any("set location" in line.lower() for line in buf):
+                if any("set location" in line.lower() or "waiting for" in line.lower() or "press enter to exit" in line.lower() for line in buf):
                     confirmed = True
                     break
                 time.sleep(0.25)
@@ -814,21 +821,30 @@ class IosCliSession:
             pass
 
     def _launch(self, gpx=None, point=None):
-        cmd = pmd3_command()
-        if self.device.get("connection") == "Wi-Fi":
-            cmd += ["--mobdev2"]
-        if self.device.get("id"):
-            cmd += ["--udid", self.device["id"]]
-        cmd += ["-v", "developer", "dvt", "simulate-location"]
+        cmd = pmd3_command() + ["-v", "developer", "dvt", "simulate-location"]
         if point is not None:
-            cmd += ["set", "--", f"{point[0]:.6f}", f"{point[1]:.6f}"]
+            sub = ["set"]
+            if self.device.get("connection") == "Wi-Fi":
+                sub += ["--mobdev2"]
+            if self.device.get("id"):
+                sub += ["--udid", self.device["id"]]
+            sub += ["--", f"{point[0]:.6f}", f"{point[1]:.6f}"]
+            cmd += sub
         else:
-            cmd += ["play", str(gpx)]
+            sub = ["play"]
+            if self.device.get("connection") == "Wi-Fi":
+                sub += ["--mobdev2"]
+            if self.device.get("id"):
+                sub += ["--udid", self.device["id"]]
+            sub += [str(gpx)]
+            cmd += sub
         if self.cfg.get("mode") == "route":
             self.motion_tracker = build_motion(self.cfg)
             self._last_step_time = time.time()
         env = dict(os.environ)
         env["PYTHONUNBUFFERED"] = "1"
+        if self.device.get("id"):
+            env["PYMOBILEDEVICE3_UDID"] = self.device["id"]
         # stdin stays open so the CLI's "Press ENTER to exit" wait blocks
         # instead of reading EOF and aborting the session
         return self._track_proc(subprocess.Popen(
@@ -912,7 +928,7 @@ class IosCliSession:
             while time.time() < deadline:
                 if launched.poll() is not None:
                     break
-                if any("set location" in line.lower() for line in buf):
+                if any("set location" in line.lower() or "waiting for" in line.lower() or "press enter to exit" in line.lower() for line in buf):
                     break
                 time.sleep(0.2)
 
