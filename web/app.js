@@ -867,27 +867,29 @@ function renderCaps(caps) {
 
 function deviceBadges(d) {
   const b = [];
-  if (d.connection === "Wi-Fi" || d.connection === "Network") {
-    b.push(`<span class="badge wifi">Wi-Fi (Wireless)</span>`);
+  const isWifi = d.connection === "Wi-Fi" || d.connection === "Network";
+  if (isWifi) {
+    b.push(`<span class="badge wifi">Wi-Fi</span>`);
   } else {
     b.push(`<span class="badge">USB</span>`);
   }
   if (d.platform === "ios") {
     b.push(`<span class="badge">${d.os_version ? "iOS " + d.os_version : "iOS"}</span>`);
-    b.push(d.paired
-      ? `<span class="badge ok">paired</span>`
-      : `<span class="badge warn">needs trust</span>`);
-    if (d.developer_mode === true) b.push(`<span class="badge ok">dev mode</span>`);
-    if (d.developer_mode === false) b.push(`<span class="badge err">dev mode OFF</span>`);
-    if (d.tunnel_mode) b.push(`<span class="badge">tunnel mode</span>`);
+    if (!d.paired) {
+      b.push(`<span class="badge warn">needs trust</span>`);
+    }
+    if (d.developer_mode === false) {
+      b.push(`<span class="badge err">dev mode OFF</span>`);
+    }
   } else {
     b.push(`<span class="badge">Android ${d.os_version || ""}</span>`);
-    if (d.adb_status !== "device") b.push(`<span class="badge err">${d.adb_status}</span>`);
-    else {
+    if (d.adb_status && d.adb_status !== "device") {
+      b.push(`<span class="badge err">${d.adb_status}</span>`);
+    } else {
       const br = d.bridge || {};
-      b.push(br.installed && br.mock_allowed
-        ? `<span class="badge ok">bridge ready</span>`
-        : `<span class="badge warn">needs bridge setup</span>`);
+      if (!br.installed || !br.mock_allowed) {
+        b.push(`<span class="badge warn">needs bridge setup</span>`);
+      }
     }
   }
   if (d.session_state === "locked_unplugged") {
@@ -934,14 +936,10 @@ function renderDevices() {
       } catch (err) { toast(err.message, "error"); }
     }));
   const selDev = state.devices.find((d) => d.id === state.selected);
-  const goWirelessBtn = $("goWirelessBtn");
-  if (goWirelessBtn) {
-    if (selDev && (selDev.can_wireless || selDev.connection === "USB")) {
-      goWirelessBtn.classList.remove("hidden");
-    } else {
-      goWirelessBtn.classList.add("hidden");
-    }
-  }
+  const devName = $("wirelessDevName");
+  const usbCard = $("wirelessUsbCard");
+  if (devName && selDev) devName.textContent = selDev.name || selDev.id;
+  if (usbCard) usbCard.style.display = (selDev && selDev.connection === "USB") ? "block" : "none";
 }
 
 /* -------------------------------------------------------------- session */
@@ -1124,7 +1122,7 @@ async function poll() {
     renderCaps(st.capabilities);
     renderDevices();
     const selDev = st.devices.find((x) => x.id === state.selected);
-    $("devModeBtn").classList.toggle("hidden", !(selDev && selDev.platform === "ios"));
+    $("devModeBtn").classList.toggle("hidden", !(selDev && selDev.platform === "ios" && selDev.developer_mode === false));
     const s = state.selected ? st.sessions.find((x) => x.device_id === state.selected) : st.sessions[0];
     state.session = s || null;
 
@@ -1205,32 +1203,44 @@ $("installAdbBtn").addEventListener("click", async () => {
   } catch (e) { toast(e.message, "error"); }
 });
 
-const goWirelessBtn = $("goWirelessBtn");
-if (goWirelessBtn) {
-  goWirelessBtn.addEventListener("click", async () => {
+const wirelessBtn = $("wirelessBtn");
+if (wirelessBtn) {
+  wirelessBtn.addEventListener("click", () => {
+    const modal = $("wifiModal");
+    if (modal) {
+      modal.classList.remove("hidden");
+      const selDev = state.devices.find((d) => d.id === state.selected);
+      const devName = $("wirelessDevName");
+      const usbCard = $("wirelessUsbCard");
+      if (devName && selDev) devName.textContent = selDev.name || selDev.id;
+      if (usbCard) usbCard.style.display = (selDev && selDev.connection === "USB") ? "block" : "none";
+      const inp = $("wifiHostInput");
+      if (inp && (!selDev || selDev.connection !== "USB")) inp.focus();
+    }
+  });
+}
+
+const goWirelessActionBtn = $("goWirelessActionBtn");
+if (goWirelessActionBtn) {
+  goWirelessActionBtn.addEventListener("click", async () => {
     if (!state.selected) {
       toast("Select a device first.", "warn");
       return;
     }
     toast("Enabling wireless mode…", "info");
+    goWirelessActionBtn.disabled = true;
+    goWirelessActionBtn.textContent = "Enabling Wi-Fi…";
     try {
       const res = await api("/api/device/wireless/enable", { device_id: state.selected });
       toast(res.message || "Wireless mode enabled! You can now unplug the USB cable.", "ok");
+      const modal = $("wifiModal");
+      if (modal) modal.classList.add("hidden");
       refresh(true);
     } catch (err) {
       toast(err.message, "error");
-    }
-  });
-}
-
-const connectWifiBtn = $("connectWifiBtn");
-if (connectWifiBtn) {
-  connectWifiBtn.addEventListener("click", () => {
-    const modal = $("wifiModal");
-    if (modal) {
-      modal.classList.remove("hidden");
-      const inp = $("wifiHostInput");
-      if (inp) inp.focus();
+    } finally {
+      goWirelessActionBtn.disabled = false;
+      goWirelessActionBtn.textContent = "Enable Cable-Free Wi-Fi & Unplug";
     }
   });
 }

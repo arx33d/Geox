@@ -314,6 +314,7 @@ class AndroidSession:
         self.cfg = cfg
         self.stop_event = threading.Event()
         self.state = "connecting"
+        self.error = None
         start_pt = (
             (float(cfg["lat"]), float(cfg["lng"]))
             if "lat" in cfg and "lng" in cfg
@@ -374,13 +375,16 @@ class AndroidSession:
         }
 
     def _send(self, lat, lng, speed_mps=None):
+        # Android's am command does not support --ed (double). We pass both --es (String)
+        # and --ef (Float) so any bridge version can deserialize coordinates without error.
         cmd = [
             "am", "broadcast", "-a", f"{BRIDGE_PKG}.SET_LOCATION", "-p", BRIDGE_PKG,
-            "--ed", "lat", f"{lat:.7f}", "--ed", "lng", f"{lng:.7f}",
-            "--ed", "acc", "5.0", "--ed", "alt", "10.0",
+            "--es", "lat", f"{lat:.7f}", "--es", "lng", f"{lng:.7f}",
+            "--ef", "lat_f", f"{lat:.7f}", "--ef", "lng_f", f"{lng:.7f}",
+            "--ef", "acc", "5.0", "--ef", "alt", "10.0",
         ]
         if speed_mps is not None:
-            cmd += ["--ed", "speed", f"{speed_mps:.2f}"]
+            cmd += ["--ef", "speed", f"{speed_mps:.2f}", "--es", "speed_s", f"{speed_mps:.2f}"]
         if self.cfg.get("unplug_lock"):
             cmd += ["--ez", "persist", "true"]
         p = _shell(self.engine, self.device["id"], cmd, timeout=15)

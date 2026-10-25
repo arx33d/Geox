@@ -5,6 +5,7 @@
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
     <uses-permission android:name="android.permission.ACCESS_MOCK_LOCATION"/>
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION"/>
     <uses-permission android:name="android.permission.INTERNET"/>
 
     <application
@@ -22,7 +23,8 @@
 
         <service
             android:name=".MockService"
-            android:exported="false"/>
+            android:exported="false"
+            android:foregroundServiceType="location"/>
 
         <!-- Driven over ADB by the Geox desktop app -->
         <receiver

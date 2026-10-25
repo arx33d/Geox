@@ -370,6 +370,31 @@ class TestOfflineCapabilities(unittest.TestCase):
         self.assertEqual(e_lat, lat)
         self.assertGreater(e_lng, lng)
 
+    def test_ios_wifi_session_instantiation(self):
+        from geox import ios_backend
+        engine = Engine()
+        device = {"id": "test-wifi-udid", "platform": "ios", "connection": "Wi-Fi"}
+        cfg = {"mode": "fixed", "lat": 45.5017, "lng": -73.5673}
+        sess = ios_backend.start_session(engine, device, cfg)
+        self.assertIsInstance(sess, ios_backend.IosWifiSession)
+        snap = sess.snapshot()
+        self.assertEqual(snap["platform"], "ios")
+        self.assertEqual(snap["engine"], "wifi-userspace-tunnel")
+        self.assertIsNone(snap["error"])
+        sess.update({"lat": 46.0, "lng": -74.0})
+        self.assertEqual(sess.last, (46.0, -74.0))
+
+    def test_android_session_error_initialized(self):
+        from geox import android_backend
+        engine = Engine()
+        device = {"id": "192.168.1.50:5555", "platform": "android"}
+        cfg = {"mode": "fixed", "lat": 45.5017, "lng": -73.5673}
+        sess = android_backend.AndroidSession(engine, device, cfg)
+        self.assertIsNone(sess.error)
+        snap = sess.snapshot()
+        self.assertIsNone(snap["error"])
+        self.assertEqual(snap["engine"], "mock-provider")
+
 
 if __name__ == "__main__":
     unittest.main()

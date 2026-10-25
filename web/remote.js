@@ -130,7 +130,7 @@
           const opt = document.createElement("option");
           opt.value = d.id;
           const conn = d.connection ? ` [${d.connection}]` : "";
-          opt.textContent = `${d.display_name || d.model || d.id}${conn}`;
+          opt.textContent = `${d.name || d.display_name || d.model || d.id}${conn}`;
           if (d.id === prevVal) opt.selected = true;
           deviceSelect.appendChild(opt);
         });
@@ -148,9 +148,10 @@
         if (session && session.state === "active") {
           statusBadge.textContent = "Active";
           statusBadge.className = "status-badge active";
-          if (session.coords && session.coords.lat && session.coords.lng) {
-            // Update marker if not actively dragging
-            setPin(session.coords.lat, session.coords.lng, false);
+          const sLat = (session.coords && session.coords.lat) != null ? session.coords.lat : (session.last && session.last[0]);
+          const sLng = (session.coords && session.coords.lng) != null ? session.coords.lng : (session.last && session.last[1]);
+          if (sLat != null && sLng != null) {
+            setPin(sLat, sLng, false);
           }
         } else if (session && session.state === "locked_unplugged") {
           statusBadge.textContent = "Locked";
@@ -192,7 +193,7 @@
 
     applyBtn.textContent = "Applying...";
     try {
-      const res = await fetch("/api/start", {
+      const res = await fetch("/api/update", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)

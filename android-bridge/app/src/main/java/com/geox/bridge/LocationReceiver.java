@@ -35,12 +35,15 @@ public class LocationReceiver extends BroadcastReceiver {
 
         if (!ACTION_SET.equals(action)) return;
 
-        double lat = intent.getDoubleExtra("lat", Double.NaN);
-        double lng = intent.getDoubleExtra("lng", Double.NaN);
+        double lat = getDoubleExtra(intent, "lat", Double.NaN);
+        if (Double.isNaN(lat)) lat = getDoubleExtra(intent, "lat_f", Double.NaN);
+        double lng = getDoubleExtra(intent, "lng", Double.NaN);
+        if (Double.isNaN(lng)) lng = getDoubleExtra(intent, "lng_f", Double.NaN);
         if (Double.isNaN(lat) || Double.isNaN(lng)) return;
-        double alt = intent.getDoubleExtra("alt", 10.0);
-        double acc = intent.getDoubleExtra("acc", 5.0);
-        double speed = intent.getDoubleExtra("speed", -1.0);
+        double alt = getDoubleExtra(intent, "alt", 10.0);
+        double acc = getDoubleExtra(intent, "acc", 5.0);
+        double speed = getDoubleExtra(intent, "speed", -1.0);
+        if (speed < 0) speed = getDoubleExtra(intent, "speed_s", -1.0);
         boolean persist = intent.getBooleanExtra("persist", false);
 
         mock(lm, LocationManager.GPS_PROVIDER, lat, lng, alt, acc, speed);
@@ -98,5 +101,15 @@ public class LocationReceiver extends BroadcastReceiver {
             lm.removeTestProvider(provider);
         } catch (Exception ignored) {
         }
+    }
+
+    private static double getDoubleExtra(Intent intent, String key, double defaultVal) {
+        if (intent == null || !intent.hasExtra(key)) return defaultVal;
+        try {
+            Object obj = intent.getExtras().get(key);
+            if (obj instanceof Number) return ((Number) obj).doubleValue();
+            if (obj instanceof String) return Double.parseDouble((String) obj);
+        } catch (Exception ignored) {}
+        return intent.getDoubleExtra(key, defaultVal);
     }
 }

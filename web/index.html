@@ -53,8 +53,7 @@
         </div>
         <div class="row btn-row" style="margin-top:12px;">
           <button id="refreshBtn" class="btn small ghost">Refresh</button>
-          <button id="goWirelessBtn" class="btn small ghost hidden" title="Switch selected phone to Wi-Fi so you can unplug the USB cable">Go Wireless</button>
-          <button id="connectWifiBtn" class="btn small ghost" title="Connect a phone over Wi-Fi without USB cable">Connect Wi-Fi</button>
+          <button id="wirelessBtn" class="btn small ghost" title="Cable-free wireless control for iPhone and Android">Wireless Mode</button>
           <button id="installAdbBtn" class="btn small ghost hidden">Install ADB</button>
           <button id="devModeBtn" class="btn small ghost hidden">Enable Dev Mode</button>
         </div>
@@ -527,7 +526,7 @@
 
 
 
-  <!-- Connect over Wi-Fi Modal -->
+  <!-- Wireless Mode Modal -->
   <div id="wifiModal" class="modal-backdrop hidden" onclick="if(event.target===this)this.classList.add('hidden')">
     <div class="modal-card">
       <div class="modal-head">
@@ -538,11 +537,18 @@
             <path d="M8.53 16.11a6 6 0 0 1 6.95 0"></path>
             <line x1="12" y1="20" x2="12.01" y2="20"></line>
           </svg>
-          <span>Connect Device over Wi-Fi</span>
+          <span>Wireless Mode (Cable-Free)</span>
         </div>
         <button id="closeWifiModal" class="btn-icon" onclick="document.getElementById('wifiModal').classList.add('hidden')">&times;</button>
       </div>
       <div class="modal-body">
+        <div id="wirelessUsbCard" class="optrow" style="background:var(--bg-elevated);padding:14px;border-radius:8px;border:1px solid var(--border-subtle);margin-bottom:16px;">
+          <div style="font-weight:600;font-size:14px;margin-bottom:4px;">Switch <span id="wirelessDevName">Connected Phone</span> to Wi-Fi</div>
+          <div class="hint" style="margin-bottom:12px;">Enables wireless developer connection so you can safely unplug the USB cable and continue spoofing from anywhere.</div>
+          <button id="goWirelessActionBtn" class="btn primary small" style="width:100%;">Enable Cable-Free Wi-Fi & Unplug</button>
+        </div>
+
+        <div style="font-size:12px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.05em;margin:16px 0 8px;">Or Connect Manually over Wi-Fi</div>
         <div class="optrow">
           <label class="optlabel">PHONE IP ADDRESS & PORT</label>
           <input id="wifiHostInput" type="text" placeholder="e.g. 192.168.1.50 or 192.168.1.50:5555" style="width:100%;">
@@ -560,7 +566,7 @@
           <input id="wifiPairingCodeInput" type="text" placeholder="6-digit pairing code (if using Android 11+ Pair)" style="width:100%;">
         </div>
         <div class="row" style="margin-top:18px;">
-          <button id="wifiConnectSubmitBtn" class="btn primary">CONNECT WIRELESSLY</button>
+          <button id="wifiConnectSubmitBtn" class="btn ghost" style="width:100%;">CONNECT VIA IP</button>
         </div>
       </div>
     </div>
@@ -600,7 +606,7 @@
 
   <script src="vendor/leaflet/leaflet.js"></script>
   <script src="vendor/qrcode.min.js"></script>
-  <script src="app.js?v=1.6.1"></script>
+  <script src="app.js?v=1.6.2"></script>
 </body>
 
 </html>

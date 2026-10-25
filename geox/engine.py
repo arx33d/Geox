@@ -124,10 +124,10 @@ class Engine:
                 pass
 
     # --------------------------------------------------------------- devices
-    def scan_devices(self):
+    def scan_devices(self, force=False):
         with self._scan_lock:
             now = time.time()
-            if now - self._last_scan < SCAN_THROTTLE:
+            if not force and now - self._last_scan < SCAN_THROTTLE:
                 return self._devices_cache
             self._last_scan = now
             devices = []
@@ -150,6 +150,12 @@ class Engine:
     # --------------------------------------------------------------- control
     def start(self, device_id, cfg):
         device = next((d for d in self.scan_devices() if d["id"] == device_id), None)
+        if device is None:
+            old_s = self.sessions.get(device_id)
+            if old_s and hasattr(old_s, "device"):
+                device = old_s.device
+            else:
+                device = next((d for d in self.scan_devices(force=True) if d["id"] == device_id), None)
         if device is None:
             raise ValueError("That device is not connected (or not authorised) any more.")
         self._validate_cfg(cfg)
@@ -185,20 +191,22 @@ class Engine:
 
     def update(self, device_id, cfg):
         """Seamlessly hot-swap location and motion settings without stopping the session or exposing real GPS."""
-        device = next((d for d in self.scan_devices() if d["id"] == device_id), None)
-        if device is None:
-            raise ValueError("That device is not connected (or not authorised) any more.")
         self._validate_cfg(cfg)
 
         session = self.sessions.get(device_id)
-        if not session or getattr(session, "state", None) not in ("active", "connecting"):
-            return self.start(device_id, cfg)
-
-        if hasattr(session, "update"):
+        if session and hasattr(session, "update") and getattr(session, "state", None) in ("active", "connecting", "locked_unplugged"):
             session.update(cfg)
-        else:
-            return self.start(device_id, cfg)
-        return session.snapshot()
+            return session.snapshot()
+
+        device = next((d for d in self.scan_devices() if d["id"] == device_id), None)
+        if device is None and session and hasattr(session, "device"):
+            device = session.device
+        if device is None:
+            device = next((d for d in self.scan_devices(force=True) if d["id"] == device_id), None)
+        if device is None:
+            raise ValueError("That device is not connected (or not authorised) any more.")
+
+        return self.start(device_id, cfg)
 
     def stop(self, device_id):
         session = self.sessions.pop(device_id, None)
