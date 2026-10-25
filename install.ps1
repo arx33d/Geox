@@ -166,7 +166,7 @@ $cscPath = "C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe"
 $launcherCs = Join-Path $InstallDir "tools\GeoxLauncher.cs"
 $iconPath = Join-Path $InstallDir "tools\geox.ico"
 
-if (Test-Path $cscPath -and (Test-Path $launcherCs)) {
+if ((Test-Path $cscPath) -and (Test-Path $launcherCs)) {
     Write-Step "Building native Geox.exe executable..."
     $cscArgs = @(
         "/nologo",
@@ -188,10 +188,15 @@ Write-Step "Creating shortcuts..."
 try {
     $wsh = New-Object -ComObject WScript.Shell
     
+    $targetApp = Join-Path $InstallDir "run_geox.bat"
+    if (Test-Path $geoxExe) {
+        $targetApp = $geoxExe
+    }
+
     # Desktop shortcut
     $desktopPath = [Environment]::GetFolderPath("Desktop")
     $shortcutDesktop = $wsh.CreateShortcut((Join-Path $desktopPath "Geox.lnk"))
-    $shortcutDesktop.TargetPath = if (Test-Path $geoxExe) { $geoxExe } else { Join-Path $InstallDir "run_geox.bat" }
+    $shortcutDesktop.TargetPath = $targetApp
     $shortcutDesktop.WorkingDirectory = $InstallDir
     if (Test-Path $iconPath) { $shortcutDesktop.IconLocation = $iconPath }
     $shortcutDesktop.Description = "Geox GPS Location Spoofer"
@@ -200,7 +205,7 @@ try {
     # Start Menu shortcut
     $startMenuPrograms = [Environment]::GetFolderPath("Programs")
     $shortcutStart = $wsh.CreateShortcut((Join-Path $startMenuPrograms "Geox.lnk"))
-    $shortcutStart.TargetPath = if (Test-Path $geoxExe) { $geoxExe } else { Join-Path $InstallDir "run_geox.bat" }
+    $shortcutStart.TargetPath = $targetApp
     $shortcutStart.WorkingDirectory = $InstallDir
     if (Test-Path $iconPath) { $shortcutStart.IconLocation = $iconPath }
     $shortcutStart.Description = "Geox GPS Location Spoofer"
