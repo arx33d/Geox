@@ -32,6 +32,11 @@ geox --preset mcmurdo --movement roam 200 5
 # Plan and drive a realistic trip:
 geox --from "Vancouver" --to "Seattle" --profile car --speed-factor 1.5
 
+# Wireless Wi-Fi and Unplug & Go:
+geox --wireless                       # Switch plugged USB device to wireless Wi-Fi mode
+geox --connect-wifi 192.168.1.50:5555  # Connect directly to a phone over Wi-Fi
+geox --location "Paris, France" --lock # Lock location persistently and unplug cable
+
 # Manage devices and sessions:
 geox --devices          # List connected phones and status
 geox --stop             # Stop spoofing & restore real GPS
@@ -84,6 +89,15 @@ Nothing is ever installed on the iPhone. The mechanism is Apple's own built-in d
 On modern iOS the developer channel runs through an encrypted tunnel that Geox establishes for you; the first connection also mounts Apple's developer image automatically. You just press START, and the log shows each step.
 
 **Android.** Android has an official *mock location provider* API. Geox installs the Geox Bridge companion app, grants it the mock-location capability over ADB, and broadcasts new coordinates to it every 2 seconds. The bridge feeds them into the OS as GPS fixes.
+
+**Wireless Wi-Fi Mode.** You do not need to keep your phone plugged into USB:
+- **Android over Wi-Fi:** Click "Go Wireless" to enable ADB TCP/IP mode and connect over your local Wi-Fi automatically, or use "Connect Wi-Fi" with custom IP:port or Android 11+ pairing code.
+- **iPhone over Wi-Fi:** Geox enables Apple Wi-Fi sync lockdown service. Once paired over Wi-Fi, untethered iPhones are discovered via Bonjour (_apple-mobdev2._tcp) and simulated location sessions run completely cable-free.
+
+**Unplug & Go (Location Lock).** If you need to unplug your phone and take it with you away from the PC:
+- Check **Unplug & Go (Lock Location)** and press START SPOOFING.
+- **iPhone:** The mock location fix is set into Apple CoreLocation. When unplugged, iOS retains the simulated location persistently across all apps until the phone reboots or you stop it.
+- **Android:** Geox Bridge automatically launches its persistent background `MockService` foreground service, continuously reinforcing the mock GPS fix every 1.5 seconds on-device even when completely disconnected from ADB and your PC.
 
 **Movement.** A frozen pin is suspicious. Geox can move:
 
@@ -140,7 +154,7 @@ Tips: use Roam/Trip rather than a frozen pin, keep jumps physically possible, an
 | iPhone not in device list | Use a *data* cable, unlock phone, tap **Trust**, press Refresh |
 | "Developer Mode is OFF" error card | Press the **Enable Developer Mode** button in the card (passcode phones: flip the switch in Settings → Privacy & Security → Developer Mode), wait for the reboot, START again |
 | iOS 17+ first connect is slow | Normal: a tunnel and the developer image are being set up (first time only) |
-| Spoof stops when unplugged | Expected: the session lives on the cable. Keep connected. |
+| Spoof stops when unplugged | Use **Unplug & Go (Lock Location)** before disconnecting, or switch to **Wireless Wi-Fi mode** |
 | "The iPhone disappeared from USB" | The session waits up to 2 minutes for the phone to come back, then stops. Replug the cable (a different USB port helps), press START. |
 | Location briefly flickers back to real | Geox re-asserts the fake fix every second and reconnects through tunnel blips automatically. Persistent flicker usually means a loose cable or a weak USB port; also keep USB selective suspend disabled (power plan → USB settings) |
 | Android "needs bridge setup" | Build the APK (§2), then press **Setup bridge** |
@@ -187,7 +201,9 @@ Geox/
 
 **Does Find My show the fake location?** Yes. Find My reads the OS location services, which report the simulated fix while a session is open.
 
-**Does the phone need to stay plugged in?** Yes, while spoofing. The simulation is a live session over USB.
+**Does the phone need to stay plugged in?** No. You have two options:
+1. **Wireless Wi-Fi Mode:** Control your phone, live routes, and roam cable-free over your local Wi-Fi network without keeping the USB cable connected.
+2. **Unplug & Go (Location Lock):** Tick "Unplug & Go (Lock Location)", click START SPOOFING, and unplug the cable. The location stays locked on the device at OS level even when completely disconnected and taken away from your PC.
 
 **Does anything get installed on my iPhone?** No. Nothing is installed; it uses Apple's built-in developer mechanism.
 

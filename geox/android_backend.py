@@ -13,6 +13,7 @@ mocked fix from the OS location stack.
 
 import json
 import os
+import re
 import subprocess
 import threading
 import time
@@ -125,6 +126,85 @@ def _bridge_state(engine, device_id):
     return state
 
 
+def get_device_wifi_ip(engine, device_id):
+    """Retrieve the phone's Wi-Fi IP address over ADB."""
+    try:
+        p = _shell(engine, device_id, ["ip", "route", "get", "1.1.1.1"], timeout=5)
+        m = re.search(r"src\s+([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)", p.stdout or "")
+        if m:
+            return m.group(1)
+    except Exception:
+        pass
+
+    try:
+        p = _shell(engine, device_id, ["ip", "-f", "inet", "addr", "show", "wlan0"], timeout=5)
+        m = re.search(r"inet\s+([0-9]+\.[0-9]+\.[0-9]+\.[0-9]+)", p.stdout or "")
+        if m:
+            return m.group(1)
+    except Exception:
+        pass
+
+    try:
+        p = _shell(engine, device_id, ["getprop", "dhcp.wlan0.ipaddress"], timeout=5)
+        ip = (p.stdout or "").strip()
+        if ip and re.match(r"^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$", ip):
+            return ip
+    except Exception:
+        pass
+
+    return None
+
+
+def enable_wireless_adb(engine, device_id, port=5555):
+    """Switch an Android device to wireless ADB mode so the USB cable can be unplugged."""
+    ip = get_device_wifi_ip(engine, device_id)
+    if not ip:
+        raise AndroidError(
+            "Could not detect phone's Wi-Fi IP address. Ensure your phone and PC are connected to the same Wi-Fi network."
+        )
+    engine.log(f"[Android] enabling TCP/IP mode on port {port} for {device_id}…")
+    p = _run(engine, ["-s", device_id, "tcpip", str(port)], timeout=15)
+    if p.returncode != 0:
+        raise AndroidError(f"Failed to enable TCP/IP mode: {(p.stdout or p.stderr or '').strip()}")
+    time.sleep(1.5)
+    target = f"{ip}:{port}"
+    engine.log(f"[Android] connecting to {target} over Wi-Fi…")
+    conn = _run(engine, ["connect", target], timeout=15)
+    out = (conn.stdout or conn.stderr or "").strip()
+    if "connected" in out.lower():
+        engine.log(f"[Android] connected wirelessly to {target}! You can now unplug the USB cable.", "good")
+        _ANDROID_DETAILS.pop(device_id, None)
+        return {"ok": True, "device_id": target, "ip": ip, "port": port, "message": f"Connected to {target}. You can now unplug the USB cable."}
+    raise AndroidError(f"Could not connect to {target} over Wi-Fi: {out}")
+
+
+def connect_wireless_adb(engine, host_port):
+    """Manually connect to an Android device over Wi-Fi (e.g. 192.168.1.50:5555)."""
+    host_port = host_port.strip()
+    if ":" not in host_port:
+        host_port = f"{host_port}:5555"
+    engine.log(f"[Android] connecting to {host_port} over Wi-Fi…")
+    conn = _run(engine, ["connect", host_port], timeout=15)
+    out = (conn.stdout or conn.stderr or "").strip()
+    if "connected" in out.lower():
+        engine.log(f"[Android] connected wirelessly to {host_port}!", "good")
+        return {"ok": True, "device_id": host_port, "message": f"Connected to {host_port} over Wi-Fi."}
+    raise AndroidError(f"Could not connect to {host_port}: {out}")
+
+
+def pair_wireless_adb(engine, host_port, pairing_code):
+    """Pair an Android device using Android 11+ Wireless Debugging code."""
+    host_port = host_port.strip()
+    pairing_code = pairing_code.strip()
+    engine.log(f"[Android] pairing with {host_port}…")
+    p = _run(engine, ["pair", host_port, pairing_code], timeout=20)
+    out = (p.stdout or p.stderr or "").strip()
+    if "successfully paired" in out.lower():
+        engine.log(f"[Android] successfully paired with {host_port}!", "good")
+        return {"ok": True, "message": f"Successfully paired with {host_port}."}
+    raise AndroidError(f"Pairing failed: {out}")
+
+
 def list_devices(engine):
     if not adb_available():
         return []
@@ -140,10 +220,12 @@ def list_devices(engine):
         device_id, status = parts[0], parts[1]
         if status not in ("device", "unauthorized", "offline"):
             continue
+        is_wifi = ":" in device_id or bool(re.match(r"^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+", device_id))
         info = {
             "id": device_id,
             "platform": "android",
-            "connection": "USB",
+            "connection": "Wi-Fi" if is_wifi else "USB",
+            "can_wireless": not is_wifi and status == "device",
             "name": None,
             "os_version": None,
             "adb_status": status,
@@ -299,6 +381,8 @@ class AndroidSession:
         ]
         if speed_mps is not None:
             cmd += ["--ed", "speed", f"{speed_mps:.2f}"]
+        if self.cfg.get("unplug_lock"):
+            cmd += ["--ez", "persist", "true"]
         p = _shell(self.engine, self.device["id"], cmd, timeout=15)
         out = (p.stdout or "") + (p.stderr or "")
         if p.returncode != 0 or "exception" in out.lower():
@@ -309,11 +393,19 @@ class AndroidSession:
         try:
             self.motion = build_motion(self.cfg)
             self._send(*self.last)
-            self.state = "active"
-            self.engine.log(
-                f"[Android] spoofing ON → {self.cfg.get('place') or ''}"
-                f"{self.last[0]:.5f}, {self.last[1]:.5f}"
-            )
+            if self.cfg.get("unplug_lock"):
+                self.state = "locked_unplugged"
+                self.engine.log(
+                    f"[Android] Location locked at {self.last[0]:.5f}, {self.last[1]:.5f}. "
+                    "You can unplug your phone and take it anywhere. Mock GPS persists on device.",
+                    "good",
+                )
+            else:
+                self.state = "active"
+                self.engine.log(
+                    f"[Android] spoofing ON → {self.cfg.get('place') or ''}"
+                    f"{self.last[0]:.5f}, {self.last[1]:.5f}"
+                )
             prev = time.time()
             while not self.stop_event.is_set():
                 time.sleep(0.2)
@@ -323,7 +415,19 @@ class AndroidSession:
                     lat, lng = self.motion.step(now - prev)
                     try:
                         self._send(lat, lng, speed_mps=getattr(self.motion, "speed_mps", None))
+                        if not self.cfg.get("unplug_lock"):
+                            self.state = "active"
                     except AndroidError as e:
+                        if self.cfg.get("unplug_lock"):
+                            self.state = "locked_unplugged"
+                            self.engine.log(
+                                f"[Android] Location locked at {self.last[0]:.5f}, {self.last[1]:.5f}. "
+                                "Phone unplugged — mock location persisting in background on device.",
+                                "good",
+                            )
+                            while not self.stop_event.is_set():
+                                time.sleep(1.0)
+                            return
                         self.error = str(e)
                         self.state = "failed"
                         self.engine.log(f"[Android] {e}", "error")

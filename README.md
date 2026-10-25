@@ -1,14 +1,14 @@
 # Geox
 
-**Change the GPS location of a phone connected to your PC, and every app on it believes it.**
-Plug an iPhone or Android into the computer with a USB cable, pick any spot on a map, and the phone reports that location at operating-system level.
+**Change the GPS location of a phone connected to your PC or over Wi-Fi, and every app on it believes it.**
+Plug an iPhone or Android into the computer with a USB cable or connect wirelessly over Wi-Fi, pick any spot on a map, and the phone reports that location at operating-system level.
 
 [![License: MIT + Commons Clause](https://img.shields.io/badge/License-MIT_%2B_Commons_Clause-blue.svg)](LICENSE)
 
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)
 
 
-Plug an iPhone or Android into the computer with a USB cable, pick any spot on a map, and the phone reports that location at operating-system level: Find My, Snap Map, Google Maps, WhatsApp live location, everything.
+Plug an iPhone or Android into the computer with a USB cable or connect wirelessly over Wi-Fi, pick any spot on a map, and the phone reports that location at operating-system level: Find My, Snap Map, Google Maps, WhatsApp live location, everything.
 
 You are in Vancouver. Everyone checking your location sees you at McMurdo Station, Antarctica.
 
@@ -20,6 +20,8 @@ You are in Vancouver. Everyone checking your location sees you at McMurdo Statio
 - **Trip mode.** The location follows a real itinerary: car, bike, or walking routes on actual streets, at realistic speed, arriving and parking at the destination. Can parse a pasted **Google Maps link** (route links, pinned places, `@lat,lng` views).
 - **Roam mode.** Drifts between random points inside a radius at walking speed, so your pin looks alive instead of frozen.
 - **Draw mode.** Click waypoints on the map and travel between them at a speed you choose.
+- **Wireless Wi-Fi mode.** Control phone movement, live trips, and roam completely cable-free over local Wi-Fi without needing a USB cable.
+- **Unplug & Go (Location Lock).** Lock a location on your phone and unplug the cable. The device persistently retains the mock location at operating-system level wherever you take it.
 - **iPhone, iOS 15 through current.** Uses Apple's own Instruments location-simulation channel (the mechanism Xcode uses), including the iOS 17+ tunnel. Nothing is installed on the phone.
 - **Android.** Official mock-location provider via a tiny companion app, driven over ADB.
 - **Self-installing.** `run_geox.bat` needs no Python and no admin rights: the first run downloads everything automatically. Zip the folder and share it as-is.
@@ -62,6 +64,11 @@ geox --preset mcmurdo --movement roam 200 5
 
 # Plan and drive a realistic trip:
 geox --from "Vancouver" --to "Seattle" --profile car --speed-factor 1.5
+
+# Wireless Wi-Fi and Unplug & Go:
+geox --wireless                       # Switch plugged USB device to wireless Wi-Fi mode
+geox --connect-wifi 192.168.1.50:5555  # Connect directly to a phone over Wi-Fi
+geox --location "Paris, France" --lock # Lock location persistently and unplug cable
 
 # Device management and controls:
 geox --devices          # List connected phones

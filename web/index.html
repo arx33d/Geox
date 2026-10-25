@@ -46,6 +46,8 @@
         </div>
         <div class="row btn-row" style="margin-top:12px;">
           <button id="refreshBtn" class="btn small ghost">Refresh</button>
+          <button id="goWirelessBtn" class="btn small ghost hidden" title="Switch selected phone to Wi-Fi so you can unplug the USB cable">Go Wireless</button>
+          <button id="connectWifiBtn" class="btn small ghost" title="Connect a phone over Wi-Fi without USB cable">Connect Wi-Fi</button>
           <button id="installAdbBtn" class="btn small ghost hidden">Install ADB</button>
           <button id="devModeBtn" class="btn small ghost hidden">Enable Dev Mode</button>
         </div>
@@ -213,6 +215,15 @@
           </select>
         </div>
 
+        <div class="row" style="margin-bottom:14px;align-items:center;background:rgba(255,255,255,0.03);padding:8px 12px;border-radius:8px;border:1px solid var(--border);">
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin:0;width:100%;">
+            <input type="checkbox" id="unplugLockCheck" style="accent-color:var(--green);width:16px;height:16px;">
+            <div style="display:flex;flex-direction:column;">
+              <span style="font-weight:600;font-size:12.5px;color:var(--text);">Unplug & Go (Lock Location)</span>
+              <span class="muted" style="font-size:11px;">Keep fake GPS active after unplugging the USB cable</span>
+            </div>
+          </label>
+        </div>
         <button id="startBtn" class="btn primary">START SPOOFING</button>
 
         <div id="activeControls" class="active-controls hidden" style="margin-top:10px;">
@@ -509,6 +520,46 @@
 
   <script src="vendor/leaflet/leaflet.js"></script>
   <script src="app.js?v=1.3.1"></script>
+
+  <!-- Connect over Wi-Fi Modal -->
+  <div id="wifiModal" class="modal-backdrop hidden">
+    <div class="modal-card">
+      <div class="modal-head">
+        <div class="modal-title">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M5 12.55a11 11 0 0 1 14.08 0"></path>
+            <path d="M1.42 9a16 16 0 0 1 21.16 0"></path>
+            <path d="M8.53 16.11a6 6 0 0 1 6.95 0"></path>
+            <line x1="12" y1="20" x2="12.01" y2="20"></line>
+          </svg>
+          <span>Connect Device over Wi-Fi</span>
+        </div>
+        <button id="closeWifiModal" class="btn-icon">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="optrow">
+          <label class="optlabel">PHONE IP ADDRESS & PORT</label>
+          <input id="wifiHostInput" type="text" placeholder="e.g. 192.168.1.50 or 192.168.1.50:5555" style="width:100%;">
+          <div class="hint">Ensure your phone and this PC are connected to the same Wi-Fi network.</div>
+        </div>
+        <div class="optrow" style="margin-top:12px;">
+          <label class="optlabel">PLATFORM</label>
+          <div class="segmented-control" id="wifiPlatformChips">
+            <button class="seg-btn on" data-wplatform="android">Android</button>
+            <button class="seg-btn" data-wplatform="ios">iPhone</button>
+          </div>
+        </div>
+        <div id="wifiPairRow" class="optrow" style="margin-top:12px;">
+          <label class="optlabel">PAIRING CODE (OPTIONAL - ANDROID 11+ WIRELESS DEBUGGING)</label>
+          <input id="wifiPairingCodeInput" type="text" placeholder="6-digit pairing code (if using Android 11+ Pair)" style="width:100%;">
+        </div>
+        <div class="row" style="margin-top:18px;">
+          <button id="wifiConnectSubmitBtn" class="btn primary">CONNECT WIRELESSLY</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
 </body>
 
 </html>

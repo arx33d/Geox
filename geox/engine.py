@@ -240,6 +240,31 @@ class Engine:
         cfg["speed_kmh"] = min(max(float(cfg.get("speed_kmh", 10)), 0.5), 300)
         cfg["tick"] = min(max(float(cfg.get("tick", 3.0)), 1.0), 30)
 
+    def enable_wireless(self, device_id):
+        device = next((d for d in self.scan_devices() if d["id"] == device_id), None)
+        if device is None:
+            raise ValueError("Device not found or not connected.")
+        if device.get("platform") == "android":
+            res = android_backend.enable_wireless_adb(self, device_id)
+        elif device.get("platform") == "ios":
+            res = ios_backend.enable_wifi_sync(self, device_id)
+        else:
+            raise ValueError(f"Unsupported platform: {device.get('platform')}")
+        self._last_scan = 0
+        return res
+
+    def connect_wireless(self, host_port, platform="android", pairing_code=None):
+        if platform == "android":
+            if pairing_code:
+                android_backend.pair_wireless_adb(self, host_port, pairing_code)
+            res = android_backend.connect_wireless_adb(self, host_port)
+        elif platform == "ios":
+            res = {"ok": True, "message": "iOS Wi-Fi devices are auto-discovered on the local network."}
+        else:
+            raise ValueError(f"Unsupported platform: {platform}")
+        self._last_scan = 0
+        return res
+
     # --------------------------------------------------------------- status
     def capabilities(self):
         now = time.time()

@@ -867,6 +867,11 @@ function renderCaps(caps) {
 
 function deviceBadges(d) {
   const b = [];
+  if (d.connection === "Wi-Fi" || d.connection === "Network") {
+    b.push(`<span class="badge wifi">Wi-Fi (Wireless)</span>`);
+  } else {
+    b.push(`<span class="badge">USB</span>`);
+  }
   if (d.platform === "ios") {
     b.push(`<span class="badge">${d.os_version ? "iOS " + d.os_version : "iOS"}</span>`);
     b.push(d.paired
@@ -885,7 +890,11 @@ function deviceBadges(d) {
         : `<span class="badge warn">needs bridge setup</span>`);
     }
   }
-  if (d.active) b.push(`<span class="badge ok">SPOOFING</span>`);
+  if (d.session_state === "locked_unplugged") {
+    b.push(`<span class="badge locked">LOCKED (UNPLUGGED)</span>`);
+  } else if (d.active) {
+    b.push(`<span class="badge ok">SPOOFING</span>`);
+  }
   return b.join("");
 }
 
@@ -924,6 +933,15 @@ function renderDevices() {
         refresh(true);
       } catch (err) { toast(err.message, "error"); }
     }));
+  const selDev = state.devices.find((d) => d.id === state.selected);
+  const goWirelessBtn = $("goWirelessBtn");
+  if (goWirelessBtn) {
+    if (selDev && (selDev.can_wireless || selDev.connection === "USB")) {
+      goWirelessBtn.classList.remove("hidden");
+    } else {
+      goWirelessBtn.classList.add("hidden");
+    }
+  }
 }
 
 /* -------------------------------------------------------------- session */
@@ -931,6 +949,19 @@ function renderSession(s) {
   const el = $("sessionCard");
   if (!s || s.state === "stopped") { el.classList.add("hidden"); return; }
   el.classList.remove("hidden");
+  if (s.state === "locked_unplugged") {
+    el.classList.remove("error");
+    el.innerHTML = `
+      <b style="color:#a855f7">Location Locked (Unplugged & Cable-Free)</b><br>
+      <div style="margin-top:6px;font-size:12.5px;">
+        <span class="muted">Active Coordinates:</span> <b>${s.last[0].toFixed(5)}, ${s.last[1].toFixed(5)}</b>
+      </div>
+      <div class="muted small" style="margin-top:6px;line-height:1.4;">
+        The simulated location is locked directly on the phone. You can safely disconnect the USB cable and take your phone anywhere. The fake location persists on the device until phone reboot or STOP.
+      </div>
+    `;
+    return;
+  }
   const err = s.state === "failed";
   el.classList.toggle("error", err);
   if (err) {
@@ -1174,10 +1205,94 @@ $("installAdbBtn").addEventListener("click", async () => {
   } catch (e) { toast(e.message, "error"); }
 });
 
+const goWirelessBtn = $("goWirelessBtn");
+if (goWirelessBtn) {
+  goWirelessBtn.addEventListener("click", async () => {
+    if (!state.selected) {
+      toast("Select a device first.", "warn");
+      return;
+    }
+    toast("Enabling wireless mode…", "info");
+    try {
+      const res = await api("/api/device/wireless/enable", { device_id: state.selected });
+      toast(res.message || "Wireless mode enabled! You can now unplug the USB cable.", "ok");
+      refresh(true);
+    } catch (err) {
+      toast(err.message, "error");
+    }
+  });
+}
+
+const connectWifiBtn = $("connectWifiBtn");
+if (connectWifiBtn) {
+  connectWifiBtn.addEventListener("click", () => {
+    const modal = $("wifiModal");
+    if (modal) {
+      modal.classList.remove("hidden");
+      const inp = $("wifiHostInput");
+      if (inp) inp.focus();
+    }
+  });
+}
+
+const closeWifiModal = $("closeWifiModal");
+if (closeWifiModal) {
+  closeWifiModal.addEventListener("click", () => {
+    const modal = $("wifiModal");
+    if (modal) modal.classList.add("hidden");
+  });
+}
+
+let selectedWifiPlatform = "android";
+const wifiPlatformChips = $("wifiPlatformChips");
+if (wifiPlatformChips) {
+  wifiPlatformChips.querySelectorAll("button").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      wifiPlatformChips.querySelectorAll("button").forEach((b) => b.classList.remove("on"));
+      btn.classList.add("on");
+      selectedWifiPlatform = btn.dataset.wplatform;
+      const pairRow = $("wifiPairRow");
+      if (pairRow) {
+        pairRow.style.display = selectedWifiPlatform === "android" ? "block" : "none";
+      }
+    });
+  });
+}
+
+const wifiConnectSubmitBtn = $("wifiConnectSubmitBtn");
+if (wifiConnectSubmitBtn) {
+  wifiConnectSubmitBtn.addEventListener("click", async () => {
+    const host = $("wifiHostInput").value.trim();
+    if (!host) {
+      toast("Please enter a device IP address.", "warn");
+      return;
+    }
+    const pairingCode = $("wifiPairingCodeInput").value.trim();
+    toast("Connecting over Wi-Fi…", "info");
+    try {
+      const res = await api("/api/device/wireless/connect", {
+        host_port: host,
+        platform: selectedWifiPlatform,
+        pairing_code: pairingCode || null,
+      });
+      toast(res.message || "Connected successfully!", "ok");
+      const modal = $("wifiModal");
+      if (modal) modal.classList.add("hidden");
+      refresh(true);
+    } catch (err) {
+      toast(err.message, "error");
+    }
+  });
+}
+
 function buildPayload() {
   const devId = state.selected || (state.session && state.session.device_id);
   if (!devId) throw new Error("Select a device first (step 1).");
   const body = { device_id: devId, place: state.target.place };
+  const lockCheck = $("unplugLockCheck");
+  if (lockCheck && lockCheck.checked) {
+    body.unplug_lock = true;
+  }
   const durSelect = $("durationSelect");
   if (durSelect && durSelect.value !== "auto") {
     const hours = parseFloat(durSelect.value);

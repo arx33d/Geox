@@ -11,8 +11,8 @@ import android.os.SystemClock;
 
 /**
  * Receives coordinates broadcast by the Geox desktop app over ADB and
- * injects them as mock GPS/network fixes. Requires the mock-location
- * appop (granted by the desktop app via `adb shell appops set … allow`).
+ * injects them as mock GPS/network fixes. Supports persistent background
+ * spoofing when the USB cable is unplugged.
  */
 public class LocationReceiver extends BroadcastReceiver {
 
@@ -27,6 +27,7 @@ public class LocationReceiver extends BroadcastReceiver {
         if (lm == null) return;
 
         if (ACTION_CLEAR.equals(action)) {
+            MockService.stop(context);
             remove(lm, LocationManager.GPS_PROVIDER);
             remove(lm, LocationManager.NETWORK_PROVIDER);
             return;
@@ -40,6 +41,7 @@ public class LocationReceiver extends BroadcastReceiver {
         double alt = intent.getDoubleExtra("alt", 10.0);
         double acc = intent.getDoubleExtra("acc", 5.0);
         double speed = intent.getDoubleExtra("speed", -1.0);
+        boolean persist = intent.getBooleanExtra("persist", false);
 
         mock(lm, LocationManager.GPS_PROVIDER, lat, lng, alt, acc, speed);
         try {
@@ -48,16 +50,21 @@ public class LocationReceiver extends BroadcastReceiver {
             // some builds refuse to mock the network provider — GPS is what matters
         }
 
+        if (persist) {
+            MockService.start(context, lat, lng, alt, acc, speed);
+        }
+
         SharedPreferences.Editor prefs =
                 context.getSharedPreferences("geox", Context.MODE_PRIVATE).edit();
         prefs.putLong("lat", Double.doubleToRawLongBits(lat));
         prefs.putLong("lng", Double.doubleToRawLongBits(lng));
+        prefs.putBoolean("persist", persist);
         prefs.putLong("t", System.currentTimeMillis());
         prefs.apply();
     }
 
-    private static void mock(LocationManager lm, String provider, double lat, double lng,
-                             double alt, double acc, double speed) {
+    static void mock(LocationManager lm, String provider, double lat, double lng,
+                     double alt, double acc, double speed) {
         try {
             try {
                 lm.addTestProvider(provider, false, false, false, false,
@@ -81,11 +88,11 @@ public class LocationReceiver extends BroadcastReceiver {
             loc.setExtras(null);
             lm.setTestProviderLocation(provider, loc);
         } catch (Exception ignored) {
-            // never crash the receiver — the desktop app re-broadcasts every 2s
+            // never crash the receiver — the desktop app re-broadcasts periodically
         }
     }
 
-    private static void remove(LocationManager lm, String provider) {
+    static void remove(LocationManager lm, String provider) {
         try {
             lm.setTestProviderEnabled(provider, false);
             lm.removeTestProvider(provider);

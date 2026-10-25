@@ -94,7 +94,8 @@ def list_devices_cmd(engine):
         ver = d.get("os_version") or "unknown OS"
         active = "[ACTIVE SPOOFING]" if d.get("active") else "[IDLE]"
 
-        print(f"  {i}. {name} ({platform} {ver}) - {active}")
+        conn = d.get("connection", "USB")
+        print(f"  {i}. {name} ({platform} {ver}) [{conn}] - {active}")
         print(f"     ID: {dev_id}")
         if d.get("platform") == "ios":
             dev_mode = "ON" if d.get("developer_mode") else ("OFF" if d.get("developer_mode") is False else "Unknown")
@@ -157,6 +158,8 @@ def run_spoof(engine, device, cfg):
     elif cfg.get("mode") == "route":
         wps = cfg.get("waypoints", [])
         print(f" Mode:      TRIP ({len(wps)} waypoints, Speed Factor: {cfg.get('speed_factor', 1.0)}x)")
+    if cfg.get("unplug_lock"):
+        print(" Lock Mode: UNPLUG & GO (Location locked on device — USB cable can be disconnected)")
     print("-" * 65)
     print(" [Press Ctrl+C at any time to STOP spoofing and restore real GPS]")
     print("=" * 65 + "\n")
@@ -349,6 +352,24 @@ Examples:
         action="store_true",
         help="List all built-in location presets.",
     )
+    parser.add_argument(
+        "--wireless",
+        dest="enable_wireless",
+        action="store_true",
+        help="Switch selected phone to wireless Wi-Fi mode so you can unplug the USB cable.",
+    )
+    parser.add_argument(
+        "--connect-wifi",
+        dest="connect_wifi",
+        metavar="HOST:PORT",
+        help="Connect to a phone over Wi-Fi (e.g. 192.168.1.50:5555).",
+    )
+    parser.add_argument(
+        "--lock", "--unplug-lock",
+        dest="unplug_lock",
+        action="store_true",
+        help="Lock simulated location onto the phone so you can unplug and take it anywhere.",
+    )
 
     # Server control
     parser.add_argument(
@@ -434,6 +455,25 @@ def main(argv=None):
             print(f"[Geox] Stop result: {e}")
         return 0
 
+    if args.connect_wifi:
+        try:
+            print(f"Connecting to {args.connect_wifi} over Wi-Fi...")
+            res = engine.connect_wireless(args.connect_wifi)
+            print(f"[Geox] {res.get('message', 'Connected successfully.')}")
+        except Exception as e:
+            print(f"[ERROR] Connection failed: {e}")
+        return 0
+
+    if args.enable_wireless:
+        try:
+            target_device = pick_target_device(engine, args.device)
+            print(f"Enabling wireless mode on {target_device.get('name') or target_device['id']}...")
+            res = engine.enable_wireless(target_device["id"])
+            print(f"[Geox] {res.get('message', 'Wireless mode enabled. You can now unplug the USB cable.')}")
+        except Exception as e:
+            print(f"[ERROR] Wireless setup failed: {e}")
+        return 0
+
     if cmd == "setup-bridge":
         from .android_backend import setup_bridge
         try:
@@ -477,6 +517,8 @@ def main(argv=None):
         }
         if args.duration_hours is not None:
             cfg["playback_hours"] = args.duration_hours
+        if args.unplug_lock:
+            cfg["unplug_lock"] = True
 
         try:
             target_device = pick_target_device(engine, args.device)
@@ -513,6 +555,8 @@ def main(argv=None):
     }
     if args.duration_hours is not None:
         cfg["playback_hours"] = args.duration_hours
+    if args.unplug_lock:
+        cfg["unplug_lock"] = True
     if mode == "jitter":
         cfg["radius_m"] = radius
         cfg["speed_kmh"] = speed

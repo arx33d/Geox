@@ -298,6 +298,49 @@ class TestOfflineCapabilities(unittest.TestCase):
         self.assertEqual(res2.status_code, 200)
         self.assertTrue(res2.get_json().get("ok"))
 
+    def test_wireless_device_identification(self):
+        from geox import android_backend
+        from unittest.mock import MagicMock, patch
+
+        mock_adb_output = (
+            "List of devices attached\n"
+            "emulator-5554          device product:sdk_gphone64_arm64 model:sdk_gphone64_arm64 device:emu64a\n"
+            "192.168.1.105:5555     device product:coral model:Pixel_4_XL device:coral\n"
+        )
+        with patch.object(android_backend, "adb_available", return_value=True), \
+             patch.object(android_backend, "_run") as mock_run, \
+             patch.object(android_backend, "_bridge_state", return_value={"installed": True, "mock_allowed": True}):
+            mock_proc = MagicMock()
+            mock_proc.stdout = mock_adb_output
+            mock_run.return_value = mock_proc
+
+            devices = android_backend.list_devices(MagicMock())
+            self.assertEqual(len(devices), 2)
+            usb_dev = next(d for d in devices if d["id"] == "emulator-5554")
+            wifi_dev = next(d for d in devices if d["id"] == "192.168.1.105:5555")
+
+            self.assertEqual(usb_dev["connection"], "USB")
+            self.assertTrue(usb_dev["can_wireless"])
+
+            self.assertEqual(wifi_dev["connection"], "Wi-Fi")
+            self.assertFalse(wifi_dev["can_wireless"])
+
+    def test_wireless_api_validation(self):
+        res_no_dev = self.client.post("/api/device/wireless/enable", json={})
+        self.assertEqual(res_no_dev.status_code, 400)
+        self.assertIn("error", res_no_dev.get_json())
+
+        res_no_host = self.client.post("/api/device/wireless/connect", json={})
+        self.assertEqual(res_no_host.status_code, 400)
+        self.assertIn("error", res_no_host.get_json())
+
+    def test_unplug_lock_payload(self):
+        from geox.engine import get_engine
+        engine = get_engine()
+        cfg = {"mode": "fixed", "lat": 45.5017, "lng": -73.5673, "unplug_lock": True}
+        engine._validate_cfg(cfg)
+        self.assertTrue(cfg.get("unplug_lock"))
+
 
 if __name__ == "__main__":
     unittest.main()

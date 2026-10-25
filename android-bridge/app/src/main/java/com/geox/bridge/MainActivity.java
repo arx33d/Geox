@@ -10,21 +10,23 @@ import android.graphics.drawable.GradientDrawable;
 import android.location.LocationManager;
 import android.os.Bundle;
 import android.view.Gravity;
+import android.view.View;
 import android.view.ViewGroup;
+import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
 /**
  * Geox Bridge — receives spoofed coordinates over ADB broadcasts and feeds
- * them into Android's location stack as mock GPS fixes.
- *
- * This screen only shows status; all the work happens in LocationReceiver.
+ * them into Android's location stack as mock GPS fixes. Supports wireless
+ * and unplugged operation.
  */
 public class MainActivity extends Activity {
 
     private LinearLayout root;
     private TextView statusView;
     private TextView coordsView;
+    private Button resetBtn;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -44,8 +46,8 @@ public class MainActivity extends Activity {
         root.addView(logo);
 
         TextView sub = new TextView(this);
-        sub.setText("Companion app for the Geox desktop GPS spoofer.\n"
-                + "Nothing to tap here — control everything from the PC.");
+        sub.setText("Companion app for Geox GPS spoofer.\n"
+                + "Supports wireless Wi-Fi and unplugged operation.");
         sub.setTextColor(Color.parseColor("#8b8b93"));
         sub.setTextSize(14);
         sub.setPadding(0, dp(10), 0, dp(18));
@@ -54,17 +56,43 @@ public class MainActivity extends Activity {
         statusView = makeCard();
         coordsView = makeCard();
 
+        resetBtn = new Button(this);
+        resetBtn.setText("Reset Real GPS");
+        resetBtn.setBackgroundColor(Color.parseColor("#ef4444"));
+        resetBtn.setTextColor(Color.WHITE);
+        resetBtn.setTextSize(14);
+        resetBtn.setTypeface(Typeface.DEFAULT_BOLD);
+        LinearLayout.LayoutParams btnLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, dp(48));
+        btnLp.topMargin = dp(16);
+        resetBtn.setLayoutParams(btnLp);
+        resetBtn.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                MockService.stop(MainActivity.this);
+                LocationManager lm = getSystemService(LocationManager.class);
+                if (lm != null) {
+                    LocationReceiver.remove(lm, LocationManager.GPS_PROVIDER);
+                    LocationReceiver.remove(lm, LocationManager.NETWORK_PROVIDER);
+                }
+                SharedPreferences.Editor ed = getSharedPreferences("geox", Context.MODE_PRIVATE).edit();
+                ed.clear();
+                ed.apply();
+                refresh();
+            }
+        });
+        root.addView(resetBtn);
+
         TextView steps = new TextView(this);
-        steps.setText("Setup checklist\n"
-                + "1. Enable Developer Options (tap Build number 7×)\n"
-                + "2. Enable USB debugging, plug the cable in\n"
-                + "3. On the PC, click “Setup bridge” in Geox — it grants\n"
-                + "    the mock-location permission automatically.\n"
-                + "4. Press START SPOOFING on the PC.");
+        steps.setText("Setup & Wireless Mode\n"
+                + "1. Enable Developer Options & USB debugging\n"
+                + "2. Click 'Setup bridge' on PC to grant permission\n"
+                + "3. Switch to Wi-Fi in Geox to unplug the cable\n"
+                + "4. Use 'Reset Real GPS' anytime to restore real location.");
         steps.setTextColor(Color.parseColor("#c8c8cc"));
         steps.setTextSize(13);
         steps.setLineSpacing(dp(4), 1f);
-        steps.setPadding(0, dp(18), 0, 0);
+        steps.setPadding(0, dp(20), 0, 0);
         root.addView(steps);
 
         setContentView(root);
@@ -97,22 +125,26 @@ public class MainActivity extends Activity {
     private void refresh() {
         boolean allowed = mockLocationAllowed();
         statusView.setText(allowed
-                ? "✔ Mock-location permission: GRANTED\nThis app is allowed to inject GPS fixes."
-                : "✖ Mock-location permission: MISSING\nClick “Setup bridge” in the Geox desktop app\n(needs Developer Options enabled).");
+                ? "Mock-location permission: GRANTED\nThis app is allowed to inject GPS fixes."
+                : "Mock-location permission: MISSING\nClick 'Setup bridge' in Geox desktop app.");
         statusView.setTextColor(Color.parseColor(allowed ? "#22c55e" : "#f59e0b"));
 
         SharedPreferences prefs = getSharedPreferences("geox", Context.MODE_PRIVATE);
         double lat = Double.longBitsToDouble(prefs.getLong("lat", 0));
         double lng = Double.longBitsToDouble(prefs.getLong("lng", 0));
+        boolean persist = prefs.getBoolean("persist", false);
         long t = prefs.getLong("t", 0);
         if (t == 0) {
-            coordsView.setText("Last received fix: none yet.\nStart spoofing from the PC.");
+            coordsView.setText("Last received fix: none yet.\nStart spoofing from Geox.");
             coordsView.setTextColor(Color.parseColor("#8b8b93"));
+            resetBtn.setVisibility(View.GONE);
         } else {
-            coordsView.setText("Last received fix:\n"
-                    + lat + ", " + lng + "\n"
-                    + android.text.format.DateFormat.getTimeFormat(this).format(new java.util.Date(t)));
-            coordsView.setTextColor(Color.parseColor("#e8e8ea"));
+            String modeStr = persist ? " (Persisting unplugged)" : "";
+            coordsView.setText(String.format("Active spoof fix%s:\n%.6f, %.6f\nUpdated: %s",
+                    modeStr, lat, lng,
+                    android.text.format.DateFormat.getTimeFormat(this).format(new java.util.Date(t))));
+            coordsView.setTextColor(Color.parseColor("#22c55e"));
+            resetBtn.setVisibility(View.VISIBLE);
         }
     }
 

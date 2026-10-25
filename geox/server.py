@@ -358,6 +358,33 @@ def api_setup_bridge():
     return jsonify(bridge=state)
 
 
+@app.post("/api/device/wireless/enable")
+def api_device_wireless_enable():
+    device_id = (request.get_json(force=True, silent=True) or {}).get("device_id")
+    if not device_id:
+        return jsonify(error="Pick a device first."), 400
+    try:
+        res = engine.enable_wireless(device_id)
+        return jsonify(res)
+    except Exception as e:
+        return jsonify(error=str(e)), 400
+
+
+@app.post("/api/device/wireless/connect")
+def api_device_wireless_connect():
+    data = request.get_json(force=True, silent=True) or {}
+    host_port = data.get("host_port")
+    if not host_port:
+        return jsonify(error="Provide a host:port address (e.g. 192.168.1.50:5555)."), 400
+    platform = data.get("platform", "android")
+    pairing_code = data.get("pairing_code")
+    try:
+        res = engine.connect_wireless(host_port, platform=platform, pairing_code=pairing_code)
+        return jsonify(res)
+    except Exception as e:
+        return jsonify(error=str(e)), 400
+
+
 @app.get("/api/offline/tiles/<int:z>/<int:x>/<int:y>.jpg")
 @app.get("/api/offline/tiles/<int:z>/<int:x>/<int:y>")
 def api_offline_tile(z, x, y):

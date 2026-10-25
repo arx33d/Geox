@@ -187,6 +187,27 @@ def enable_developer_mode(engine):
     raise IosError(f"Could not enable Developer Mode: {out.strip()[:300]}")
 
 
+async def _enable_wifi_sync_async(engine, device_id):
+    from pymobiledevice3.lockdown import create_using_usbmux
+    ensure_apple_service(engine)
+    engine.log(f"[iOS] enabling Wi-Fi sync on {device_id}…")
+    try:
+        lockdown = await create_using_usbmux(serial=device_id, autopair=True, pair_timeout=30)
+        await lockdown.set_value(key="EnableWifiConnections", value=True, domain="com.apple.mobile.wireless_lockdown")
+        engine.log("[iOS] Wi-Fi connections enabled on iPhone. Ensure PC and iPhone are on the same Wi-Fi network.", "good")
+        return {
+            "ok": True,
+            "message": "Wi-Fi connections enabled on iPhone! Make sure phone and PC are on the same Wi-Fi, then you can unplug the USB cable.",
+        }
+    except Exception as e:
+        engine.log(f"[iOS] Wi-Fi sync configuration notice: {e}", "warn")
+        raise IosError(f"Could not enable Wi-Fi sync on iPhone: {e}")
+
+
+def enable_wifi_sync(engine, device_id):
+    return asyncio.run(_enable_wifi_sync_async(engine, device_id))
+
+
 def humanize_error(e):
     name = type(e).__name__
     text = str(e)
@@ -299,10 +320,13 @@ async def _scan(engine):
     ensure_apple_service(engine)
     devices = []
     for mux in await list_devices():
+        conn_str = str(mux.connection_type or "USB")
+        conn_type = "Wi-Fi" if "network" in conn_str.lower() else "USB"
         info = {
             "id": mux.serial,
             "platform": "ios",
-            "connection": mux.connection_type or "USB",
+            "connection": conn_type,
+            "can_wireless": conn_type == "USB",
             "name": None,
             "os_version": None,
             "paired": False,
@@ -346,6 +370,29 @@ async def _scan(engine):
             {k: info[k] for k in ("name", "os_version", "paired", "developer_mode", "tunnel_mode")},
         )
         devices.append(info)
+
+    try:
+        from pymobiledevice3.bonjour import iter_browse_mobdev2
+        seen_serials = {d["id"] for d in devices}
+        async for item in iter_browse_mobdev2(timeout=0.6):
+            serial = getattr(item, "serial", None) or getattr(item, "udid", None) or getattr(item, "name", None)
+            if serial and serial not in seen_serials:
+                seen_serials.add(serial)
+                devices.append({
+                    "id": serial,
+                    "platform": "ios",
+                    "connection": "Wi-Fi",
+                    "can_wireless": False,
+                    "name": getattr(item, "name", None) or "iPhone (Wi-Fi)",
+                    "os_version": getattr(item, "version", None),
+                    "paired": True,
+                    "developer_mode": True,
+                    "tunnel_mode": True,
+                    "notes": ["Connected wirelessly via Wi-Fi"],
+                })
+    except Exception:
+        pass
+
     return devices
 
 
@@ -470,12 +517,29 @@ class IosSession:
         async with DvtProvider(lockdown) as dvt, LocationSimulation(dvt) as sim:
             self.motion = build_motion(self.cfg)
             tick = float(self.cfg.get("tick", 3.0))
+            await sim.set(*self.last)
+            if self.cfg.get("unplug_lock"):
+                self.state = "locked_unplugged"
+                self.engine.log(
+                    f"[iOS] Location locked at {self.last[0]:.5f}, {self.last[1]:.5f}. "
+                    "You can safely unplug your iPhone and take it anywhere! Simulated GPS will persist on device.",
+                    "good",
+                )
+                while not self.stop_event.is_set():
+                    await asyncio.sleep(1.0)
+                try:
+                    await sim.clear()
+                except Exception:
+                    pass
+                self.state = "stopped"
+                self.engine.log("[iOS] spoofing OFF — real GPS restored")
+                return
+
             self.state = "active"
             self.engine.log(
                 f"[iOS] spoofing ON → {self.cfg.get('place') or ''}"
                 f"{self.last[0]:.5f}, {self.last[1]:.5f}"
             )
-            await sim.set(*self.last)
             prev = time.time()
             while not self.stop_event.is_set():
                 await asyncio.sleep(0.2)
@@ -750,7 +814,12 @@ class IosCliSession:
             pass
 
     def _launch(self, gpx=None, point=None):
-        cmd = pmd3_command() + ["-v", "developer", "dvt", "simulate-location"]
+        cmd = pmd3_command()
+        if self.device.get("connection") == "Wi-Fi":
+            cmd += ["--mobdev2"]
+        if self.device.get("id"):
+            cmd += ["--udid", self.device["id"]]
+        cmd += ["-v", "developer", "dvt", "simulate-location"]
         if point is not None:
             cmd += ["set", "--", f"{point[0]:.6f}", f"{point[1]:.6f}"]
         else:
@@ -790,6 +859,11 @@ class IosCliSession:
             self.state = "failed"
             self.engine.log(f"[iOS17] {e}", "error")
         except Exception as e:
+            if self.cfg.get("unplug_lock") and self.state == "locked_unplugged":
+                self.engine.log("[iOS17] Phone unplugged — fake location remains active on device.", "good")
+                while not self.stop_event.is_set():
+                    time.sleep(1.0)
+                return
             try:
                 humanize_error(e)
             except IosError as hum:
@@ -820,6 +894,38 @@ class IosCliSession:
         process can ever be (re)launched at a time and a track file is never
         rewritten while a process is reading it.
         """
+        if self.cfg.get("unplug_lock"):
+            self.state = "active"
+            place_str = f"{self.cfg['place']} " if self.cfg.get("place") else ""
+            self.engine.log(
+                f"[iOS17] Locking location → {place_str}{self.last[0]:.5f}, {self.last[1]:.5f}…",
+                "good"
+            )
+            buf = []
+            launched = self._launch(point=self.last)
+            pump = threading.Thread(target=self._pump, args=(launched, buf), daemon=True)
+            pump.start()
+            self.proc = launched
+            self._out = buf
+
+            deadline = time.time() + 30
+            while time.time() < deadline:
+                if launched.poll() is not None:
+                    break
+                if any("set location" in line.lower() for line in buf):
+                    break
+                time.sleep(0.2)
+
+            self.state = "locked_unplugged"
+            self.engine.log(
+                f"[iOS17] Location locked at {self.last[0]:.5f}, {self.last[1]:.5f}. "
+                "You can safely unplug your iPhone and take it anywhere! Fake location remains active on device.",
+                "good"
+            )
+            while not self.stop_event.is_set():
+                time.sleep(1.0)
+            return
+
         self.motion = None
         if not self._current_gpx_path:
             self._current_gpx_path = self._gpx_path(f"track-{int(time.time() * 1000)}.gpx")
