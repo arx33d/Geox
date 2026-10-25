@@ -207,7 +207,7 @@ async def _enable_wifi_sync_async(engine, device_id):
     try:
         # Bootstrap RemotePairing record over USB for cable-free iOS 17+ support
         engine.log("[iOS] setting up wireless developer pairing…")
-        _run_cli(["lockdown", "remotepairing", "--pair"], timeout=15)
+        _run_cli(["--udid", device_id, "lockdown", "remotepairing", "--pair"], timeout=15)
     except Exception:
         pass
 
@@ -1134,6 +1134,100 @@ class IosCliSession:
         return False
 
 
+_USERSPACE_TUNNEL_LOCK = threading.Lock()
+
+
+def _patch_pytcp_subsystem():
+    """Defensively prevent pmd-pytcp Subsystem.start() double-start assertions.
+
+    When restarting or switching sessions, PyTCP's process-global singleton stack
+    may have unfinished tasks from a previous run or an exited event loop.
+    Cancelling and clearing any lingering task ensures .start() always succeeds cleanly.
+    """
+    try:
+        from pmd_pytcp.runtime.subsystem import Subsystem
+        if getattr(Subsystem, "_geox_patched", False):
+            return
+        orig_start = Subsystem.start
+
+        def safe_start(self):
+            if getattr(self, "_task", None) is not None and not self._task.done():
+                try:
+                    self._task.cancel()
+                except Exception:
+                    pass
+                self._task = None
+            return orig_start(self)
+
+        Subsystem.start = safe_start
+        Subsystem._geox_patched = True
+    except Exception:
+        pass
+
+
+_patch_pytcp_subsystem()
+
+
+def _reset_pytcp_stack():
+    """Quiesce and reset process-global PyTCP / Userspace tunnel state between sessions."""
+    try:
+        from pymobiledevice3.remote import userspace_tunnel, tunnel_service
+        userspace_tunnel._active_tunnel = None
+        userspace_tunnel.USERSPACE_ACTIVE = False
+        tunnel_service.USE_USERSPACE_TUNNEL = False
+    except Exception:
+        pass
+
+    try:
+        from pmd_pytcp import stack as pytcp_stack
+    except ImportError:
+        return
+
+    try:
+        pytcp_stack.stack_running = False
+        if hasattr(pytcp_stack, "_pmd3_inited"):
+            pytcp_stack._pmd3_inited = False
+
+        if hasattr(pytcp_stack, "interfaces"):
+            for iface in list(pytcp_stack.interfaces.values()):
+                for sub in ("_arp_cache", "_nd_cache", "_dhcp4_client", "_dhcp6_client", "_rx_ring", "_tx_ring"):
+                    target = getattr(iface, sub, None)
+                    if target is not None:
+                        try:
+                            if hasattr(target, "stop"):
+                                target.stop()
+                            if hasattr(target, "_task") and target._task is not None:
+                                if not target._task.done():
+                                    target._task.cancel()
+                                target._task = None
+                        except Exception:
+                            pass
+                try:
+                    if hasattr(iface, "stop"):
+                        iface.stop()
+                    if hasattr(iface, "_task") and iface._task is not None:
+                        if not iface._task.done():
+                            iface._task.cancel()
+                        iface._task = None
+                except Exception:
+                    pass
+            pytcp_stack.interfaces.clear()
+
+        if hasattr(pytcp_stack, "timer") and pytcp_stack.timer is not None:
+            try:
+                pytcp_stack.timer.stop()
+            except Exception:
+                pass
+
+        if hasattr(pytcp_stack, "link_local") and pytcp_stack.link_local is not None:
+            try:
+                pytcp_stack.link_local.stop()
+            except Exception:
+                pass
+    except Exception:
+        pass
+
+
 class IosWifiSession:
     """iOS 17+ cable-free Wi-Fi session using pure-Python userspace RemotePairing tunnel.
 
@@ -1159,6 +1253,8 @@ class IosWifiSession:
         self.started_at = time.time()
         self.motion = None
         self._update_event = threading.Event()
+        self._loop = None
+        self._main_task = None
         self.thread = threading.Thread(target=self._run, daemon=True)
 
     def start(self):
@@ -1182,6 +1278,14 @@ class IosWifiSession:
     def stop(self):
         self.stop_event.set()
         self._update_event.set()
+        if self._loop and self._main_task and not self._main_task.done():
+            def _cancel():
+                if self._main_task and not self._main_task.done():
+                    self._main_task.cancel()
+            try:
+                self._loop.call_soon_threadsafe(_cancel)
+            except Exception:
+                pass
 
     def snapshot(self):
         telemetry = None
@@ -1218,14 +1322,22 @@ class IosWifiSession:
         self.engine.log(f"[iOS-WiFi] {self.error}", "error")
 
     def _run(self):
-        try:
-            asyncio.run(self._main())
-        except IosError as e:
-            self.error = str(e)
-            self.state = "failed"
-            self.engine.log(f"[iOS-WiFi] {e}", "error")
-        except Exception as e:
-            self._fail(e)
+        with _USERSPACE_TUNNEL_LOCK:
+            _patch_pytcp_subsystem()
+            _reset_pytcp_stack()
+            try:
+                asyncio.run(self._main())
+            except asyncio.CancelledError:
+                self.state = "stopped"
+                self.engine.log("[iOS-WiFi] session stopped")
+            except IosError as e:
+                self.error = str(e)
+                self.state = "failed"
+                self.engine.log(f"[iOS-WiFi] {e}", "error")
+            except Exception as e:
+                self._fail(e)
+            finally:
+                _reset_pytcp_stack()
 
     async def _main(self):
         from contextlib import AsyncExitStack
@@ -1235,6 +1347,8 @@ class IosWifiSession:
         from pymobiledevice3.services.dvt.instruments.location_simulation import LocationSimulation
         from pymobiledevice3.services.dvt.instruments.dvt_provider import DvtProvider
 
+        self._loop = asyncio.get_running_loop()
+        self._main_task = asyncio.current_task()
         tunnel_service.USE_USERSPACE_TUNNEL = True
         self.engine.log(
             f"[iOS-WiFi] establishing cable-free session with {self.device.get('name') or self.device['id']}…"
@@ -1309,8 +1423,15 @@ class IosWifiSession:
                 self.state = "stopped"
                 self.engine.log("[iOS-WiFi] spoofing OFF — real GPS restored")
         finally:
-            await stack.aclose()
-            tunnel_service.USE_USERSPACE_TUNNEL = False
+            try:
+                await stack.aclose()
+            except Exception:
+                pass
+            try:
+                tunnel_service.USE_USERSPACE_TUNNEL = False
+            except Exception:
+                pass
+            _reset_pytcp_stack()
 
 
 def start_session(engine, device, cfg):

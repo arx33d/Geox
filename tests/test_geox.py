@@ -410,6 +410,45 @@ class TestOfflineCapabilities(unittest.TestCase):
             self.assertEqual(devs[0]["id"], "00008110-001244E91432401E")
             self.assertEqual(devs[0]["os_version"], "27.0.1")
 
+    def test_pytcp_subsystem_protection(self):
+        from geox import ios_backend
+        ios_backend._patch_pytcp_subsystem()
+        ios_backend._reset_pytcp_stack()
+        # Verify reset_pytcp_stack runs cleanly
+        ios_backend._reset_pytcp_stack()
+
+    def test_engine_find_device_switch_to_wifi(self):
+        from unittest.mock import patch
+        from geox import ios_backend, android_backend
+        engine = Engine()
+        engine.sessions["usb-serial-1"] = type("MockSession", (), {
+            "device": {"id": "usb-serial-1", "name": "Iphone (2)", "platform": "ios", "connection": "USB"},
+            "state": "failed"
+        })()
+        mock_devices = [
+            {"id": "wifi-udid-1", "name": "Iphone 2", "platform": "ios", "connection": "Wi-Fi"}
+        ]
+        with patch.object(ios_backend, "list_devices", return_value=mock_devices), \
+             patch.object(android_backend, "list_devices", return_value=[]):
+            dev, all_devs = engine._find_device("usb-serial-1")
+            self.assertIsNotNone(dev)
+            self.assertEqual(dev["id"], "wifi-udid-1")
+            self.assertEqual(dev["connection"], "Wi-Fi")
+
+    def test_engine_usb_disconnect_helpful_error(self):
+        from unittest.mock import patch
+        from geox import ios_backend, android_backend
+        engine = Engine()
+        engine.sessions["usb-serial-2"] = type("MockSession", (), {
+            "device": {"id": "usb-serial-2", "name": "Iphone (2)", "platform": "ios", "connection": "USB"},
+            "state": "failed"
+        })()
+        with patch.object(ios_backend, "list_devices", return_value=[]), \
+             patch.object(android_backend, "list_devices", return_value=[]):
+            with self.assertRaises(ValueError) as ctx:
+                engine.start("usb-serial-2", {"mode": "fixed", "lat": 45.0, "lng": -73.0})
+            self.assertIn("disconnected from USB", str(ctx.exception))
+
 
 if __name__ == "__main__":
     unittest.main()

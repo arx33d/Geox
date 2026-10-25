@@ -180,16 +180,41 @@ class Engine:
             self._devices_cache = devices
             return devices
 
+    def _find_device(self, device_id):
+        current_devices = self.scan_devices()
+        dev = next((d for d in current_devices if d["id"] == device_id), None)
+        if dev is not None:
+            return dev, current_devices
+
+        current_devices = self.scan_devices(force=True)
+        dev = next((d for d in current_devices if d["id"] == device_id), None)
+        if dev is not None:
+            return dev, current_devices
+
+        old_s = self.sessions.get(device_id)
+        if old_s and hasattr(old_s, "device"):
+            old_name = old_s.device.get("name")
+            norm_old = re.sub(r'[\s\(\)\-_.]', '', (old_name or "").replace(".local", "")).lower()
+            if norm_old:
+                dev = next(
+                    (d for d in current_devices if re.sub(r'[\s\(\)\-_.]', '', (d.get("name") or "").replace(".local", "")).lower() == norm_old),
+                    None
+                )
+                if dev is not None:
+                    return dev, current_devices
+
+        return None, current_devices
+
     # --------------------------------------------------------------- control
     def start(self, device_id, cfg):
-        device = next((d for d in self.scan_devices() if d["id"] == device_id), None)
+        device, current = self._find_device(device_id)
         if device is None:
             old_s = self.sessions.get(device_id)
-            if old_s and hasattr(old_s, "device"):
-                device = old_s.device
-            else:
-                device = next((d for d in self.scan_devices(force=True) if d["id"] == device_id), None)
-        if device is None:
+            if old_s and hasattr(old_s, "device") and old_s.device.get("connection") == "USB":
+                raise ValueError(
+                    "iPhone was disconnected from USB. If switching to cable-free Wi-Fi, "
+                    "ensure your phone is unlocked and on the same Wi-Fi network, then click Refresh."
+                )
             raise ValueError("That device is not connected (or not authorised) any more.")
         self._validate_cfg(cfg)
 
@@ -218,7 +243,9 @@ class Engine:
         else:
             raise ValueError(f"Unknown platform {device['platform']!r}")
 
-        self.sessions[device_id] = session
+        self.sessions[device["id"]] = session
+        if device["id"] != device_id:
+            self.sessions[device_id] = session
         session.start()
         return session.snapshot()
 
@@ -231,15 +258,17 @@ class Engine:
             session.update(cfg)
             return session.snapshot()
 
-        device = next((d for d in self.scan_devices() if d["id"] == device_id), None)
-        if device is None and session and hasattr(session, "device"):
-            device = session.device
+        device, _ = self._find_device(device_id)
         if device is None:
-            device = next((d for d in self.scan_devices(force=True) if d["id"] == device_id), None)
-        if device is None:
+            old_s = self.sessions.get(device_id)
+            if old_s and hasattr(old_s, "device") and old_s.device.get("connection") == "USB":
+                raise ValueError(
+                    "iPhone was disconnected from USB. If switching to cable-free Wi-Fi, "
+                    "ensure your phone is unlocked and on the same Wi-Fi network, then click Refresh."
+                )
             raise ValueError("That device is not connected (or not authorised) any more.")
 
-        return self.start(device_id, cfg)
+        return self.start(device["id"], cfg)
 
     def stop(self, device_id):
         session = self.sessions.pop(device_id, None)
