@@ -98,6 +98,11 @@ def main():
         rest = args[args.index("--cli") + 1:] or ["--help"]
         return cli_main(rest) or 0
 
+    if any(a.startswith("--") for a in args) and not any(a in ("--host", "--port", "--no-open") for a in args):
+        from .cli import main as cli_main
+
+        return cli_main(args) or 0
+
     try:
         choice = _menu(
             [

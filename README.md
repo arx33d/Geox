@@ -29,27 +29,28 @@ You are in Vancouver. Everyone checking your location sees you at McMurdo Statio
 - **Self-installing.** `run_geox.bat` needs no Python and no admin rights: the first run downloads everything automatically. Zip the folder and share it as-is.
 - **Self-healing sessions.** The fake fix is re-asserted every second, tunnel blips auto-reconnect, and a phone that drops off USB is waited for and resumed.
 
-## Installation & Download for Windows
+## Which File Do I Run?
 
-### Option 1: One-Click PowerShell Installer (Fastest)
-Open Windows PowerShell (or Terminal) and run:
-```powershell
-irm https://raw.githubusercontent.com/arx33d/Geox/main/install.ps1 | iex
-```
-This downloads Geox, sets up the private runtime, compiles `Geox.exe`, creates Desktop & Start Menu shortcuts, and launches the application automatically.
+If you downloaded or extracted this folder:
 
-### Option 2: Standalone Windows Installer (GeoxSetup.exe)
-1. Download `GeoxSetup.exe` from the latest release.
-2. Double-click `GeoxSetup.exe` and click **Install Geox**.
-3. It installs to `%LOCALAPPDATA%\Programs\Geox` and creates desktop shortcuts.
+**Double-click `START_GEOX.bat` or `Geox.exe`**.
 
-### Option 3: Direct Native Executable (Geox.exe)
-If you downloaded or extracted the folder:
-1. Double-click **`Geox.exe`** (or `run_geox.bat`).
-2. Pick "Web UI" in the launcher menu (arrow keys + Enter).
-3. The browser opens `http://127.0.0.1:7876`.
-4. Plug the phone in with USB, unlock it, and accept the trust prompt.
-5. Select your phone, pick a destination, and press START SPOOFING.
+That is all you need to run Geox. You do not need to install anything or run setup.
+
+### File Guide:
+
+| File | Type | When to use |
+|---|---|---|
+| **`START_GEOX.bat`** | Primary Launcher | **Double-click this to launch Geox immediately** |
+| **`Geox.exe`** | Native Application | Direct executable launcher for GUI & CLI |
+| `run_geox.bat` | Batch Script | Alternative launcher if `.exe` is blocked by Windows policy |
+| `GeoxSetup.exe` | Windows Installer | Only if you want to install Geox to Start Menu and Desktop shortcuts |
+| `run_geox.sh` | Shell Script | For Linux and macOS users only |
+
+### Other Ways to Install:
+
+- **One-Click PowerShell Install**: Open PowerShell and run `irm https://raw.githubusercontent.com/arx33d/Geox/main/install.ps1 | iex`
+- **Standalone Installer**: Download `GeoxSetup.exe` from releases to install without extracting the folder.
 
 ### Option B: Command Line (CLI)
 You can run Geox directly from your terminal or command prompt (`cmd.exe`, PowerShell, or bash):

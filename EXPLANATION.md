@@ -4,17 +4,27 @@ Geox is a desktop app that changes the GPS location of a phone while it is conne
 
 Read the "Responsible use" section at the bottom before using this. It runs on your own phone and your own PC; that's the only supported use.
 
-## 1. Quick start
+## 1. Quick start (Which file to run)
+
+If you have the Geox folder:
+**Double-click `START_GEOX.bat` or `Geox.exe`**.
 
 ```
-1. Double-click  run_geox.bat
+1. Double-click  START_GEOX.bat  or  Geox.exe
 2. Pick "Web UI" in the launcher menu (arrow keys + Enter)
 3. Your browser opens  http://127.0.0.1:7876
-3. Plug the phone in with USB, unlock it, accept the trust prompt
-5. Click "Refresh devices"  →  select your phone
-6. Pick a spot on the map (or search "McMurdo Station", or use a preset)
-7. Choose a movement mode  →  press  START SPOOFING
+4. Plug the phone in with USB (or connect Wi-Fi), unlock it, accept trust prompt
+5. Click "Refresh devices" -> select your phone
+6. Pick a spot on the map (or search place, or use a preset)
+7. Choose a movement mode -> press START SPOOFING
 ```
+
+### File Quick Reference:
+- **`START_GEOX.bat`**: Start here. Auto-detects runtime and starts Geox.
+- **`Geox.exe`**: Native launcher and command-line tool.
+- **`run_geox.bat`**: Batch launcher fallback.
+- **`GeoxSetup.exe`**: Installer (only needed if you want Start Menu shortcuts).
+- **`run_geox.sh`**: For macOS / Linux users only.
 
 ### CLI Mode (direct terminal usage)
 You can also run Geox directly from your command line without opening a browser:
