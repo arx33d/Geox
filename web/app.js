@@ -1285,6 +1285,74 @@ if (wifiConnectSubmitBtn) {
   });
 }
 
+// Phone Remote Modal & QR Code
+let phoneRemoteQrInstance = null;
+const phoneRemoteBtn = $("phoneRemoteBtn");
+if (phoneRemoteBtn) {
+  phoneRemoteBtn.addEventListener("click", async () => {
+    const modal = $("phoneRemoteModal");
+    if (!modal) return;
+    modal.classList.remove("hidden");
+
+    const urlText = $("remoteUrlText");
+    const qrContainer = $("remoteQrCode");
+    if (urlText) urlText.textContent = "Detecting local network address…";
+    if (qrContainer) qrContainer.innerHTML = "";
+
+    try {
+      const res = await api("/api/server_info");
+      const remoteUrl = res.remote_url || `http://${res.local_ip || "127.0.0.1"}:${res.port || 7876}/remote`;
+      if (urlText) urlText.textContent = remoteUrl;
+
+      if (window.QRCode && qrContainer) {
+        qrContainer.innerHTML = "";
+        phoneRemoteQrInstance = new QRCode(qrContainer, {
+          text: remoteUrl,
+          width: 180,
+          height: 180,
+          colorDark: "#000000",
+          colorLight: "#ffffff",
+          correctLevel: QRCode.CorrectLevel.M,
+        });
+      }
+    } catch (err) {
+      if (urlText) urlText.textContent = "Could not fetch server network URL";
+    }
+  });
+}
+
+const closePhoneRemoteModal = $("closePhoneRemoteModal");
+if (closePhoneRemoteModal) {
+  closePhoneRemoteModal.addEventListener("click", () => {
+    const modal = $("phoneRemoteModal");
+    if (modal) modal.classList.add("hidden");
+  });
+}
+
+const copyRemoteUrlBtn = $("copyRemoteUrlBtn");
+if (copyRemoteUrlBtn) {
+  copyRemoteUrlBtn.addEventListener("click", () => {
+    const urlText = $("remoteUrlText");
+    if (!urlText) return;
+    const url = urlText.textContent;
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(url).then(() => {
+        copyRemoteUrlBtn.textContent = "Copied!";
+        setTimeout(() => { copyRemoteUrlBtn.textContent = "Copy"; }, 1500);
+      });
+    } else {
+      const ta = document.createElement("textarea");
+      ta.value = url;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand("copy");
+      document.body.removeChild(ta);
+      copyRemoteUrlBtn.textContent = "Copied!";
+      setTimeout(() => { copyRemoteUrlBtn.textContent = "Copy"; }, 1500);
+    }
+  });
+}
+
 function buildPayload() {
   const devId = state.selected || (state.session && state.session.device_id);
   if (!devId) throw new Error("Select a device first (step 1).");

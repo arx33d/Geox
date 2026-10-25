@@ -341,6 +341,35 @@ class TestOfflineCapabilities(unittest.TestCase):
         engine._validate_cfg(cfg)
         self.assertTrue(cfg.get("unplug_lock"))
 
+    def test_server_info_endpoint(self):
+        res = self.client.get("/api/server_info")
+        self.assertEqual(res.status_code, 200)
+        data = res.get_json()
+        self.assertIn("local_ip", data)
+        self.assertIn("port", data)
+        self.assertIn("remote_url", data)
+
+    def test_remote_html_endpoint(self):
+        res = self.client.get("/remote")
+        self.assertEqual(res.status_code, 200)
+        self.assertIn(b"Geox Mobile Remote", res.data)
+
+    def test_nudge_api_validation(self):
+        res_no_dev = self.client.post("/api/nudge", json={})
+        self.assertEqual(res_no_dev.status_code, 400)
+        self.assertIn("error", res_no_dev.get_json())
+
+    def test_nudge_math(self):
+        from geox.server import nudge_coords
+        lat, lng = 45.5017, -73.5673
+        n_lat, n_lng = nudge_coords(lat, lng, "north", 10.0)
+        self.assertGreater(n_lat, lat)
+        self.assertEqual(n_lng, lng)
+
+        e_lat, e_lng = nudge_coords(lat, lng, "east", 10.0)
+        self.assertEqual(e_lat, lat)
+        self.assertGreater(e_lng, lng)
+
 
 if __name__ == "__main__":
     unittest.main()

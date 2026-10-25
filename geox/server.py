@@ -4,12 +4,13 @@ Run:  python -m geox.server          → http://127.0.0.1:7876
 """
 
 import argparse
+import math
+import os
+import socket
 import threading
 import time
 import webbrowser
 
-import math
-import os
 import requests
 from flask import Flask, jsonify, request, send_file, send_from_directory
 
@@ -34,9 +35,63 @@ NOMINATIM = "https://nominatim.openstreetmap.org"
 HEADERS = {"User-Agent": "Geox/1.0 (personal GPS-spoofing desktop app)"}
 
 
+def get_local_ip() -> str:
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        s.connect(("10.255.255.255", 1))
+        ip = s.getsockname()[0]
+    except Exception:
+        try:
+            ip = socket.gethostbyname(socket.gethostname())
+        except Exception:
+            ip = "127.0.0.1"
+    finally:
+        s.close()
+    return ip
+
+
+def nudge_coords(lat: float, lng: float, direction: str, step_m: float = 10.0) -> tuple[float, float]:
+    r = 6378137.0
+    lat_rad = math.radians(lat)
+    d = (direction or "").lower().strip()
+    if d in ("north", "n", "up"):
+        dlat = math.degrees(step_m / r)
+        dlng = 0.0
+    elif d in ("south", "s", "down"):
+        dlat = -math.degrees(step_m / r)
+        dlng = 0.0
+    elif d in ("east", "e", "right"):
+        dlat = 0.0
+        dlng = math.degrees(step_m / (r * math.cos(lat_rad))) if math.cos(lat_rad) != 0 else 0.0
+    elif d in ("west", "w", "left"):
+        dlat = 0.0
+        dlng = -math.degrees(step_m / (r * math.cos(lat_rad))) if math.cos(lat_rad) != 0 else 0.0
+    else:
+        dlat, dlng = 0.0, 0.0
+    new_lat = max(min(lat + dlat, 90.0), -90.0)
+    new_lng = ((lng + dlng + 180.0) % 360.0) - 180.0
+    return round(new_lat, 7), round(new_lng, 7)
+
+
 @app.get("/")
 def index():
     return send_from_directory(app.static_folder, "index.html")
+
+
+@app.get("/remote")
+def remote_view():
+    return send_from_directory(app.static_folder, "remote.html")
+
+
+@app.get("/api/server_info")
+def api_server_info():
+    local_ip = get_local_ip()
+    port = getattr(app, "server_port", 7876)
+    return jsonify({
+        "local_ip": local_ip,
+        "port": port,
+        "remote_url": f"http://{local_ip}:{port}/remote",
+    })
 
 
 @app.get("/<path:path>")
@@ -46,7 +101,51 @@ def assets(path):
 
 @app.get("/api/status")
 def api_status():
-    return jsonify(engine.status())
+    stat = engine.status()
+    local_ip = get_local_ip()
+    port = getattr(app, "server_port", 7876)
+    stat["server"] = {
+        "local_ip": local_ip,
+        "port": port,
+        "remote_url": f"http://{local_ip}:{port}/remote",
+    }
+    return jsonify(stat)
+
+
+@app.post("/api/nudge")
+def api_nudge():
+    data = request.get_json(force=True, silent=True) or {}
+    device_id = data.get("device_id")
+    if not device_id:
+        return jsonify(error="Pick a device first."), 400
+    direction = data.get("direction", "north")
+    step_m = float(data.get("step_m", 10.0))
+
+    session = engine.sessions.get(device_id)
+    cur_lat = None
+    cur_lng = None
+    if session and session.state == "active":
+        coords = session.snapshot().get("coords") or {}
+        cur_lat = coords.get("lat")
+        cur_lng = coords.get("lng")
+
+    if cur_lat is None or cur_lng is None:
+        try:
+            cur_lat = float(data.get("lat", 45.5017))
+            cur_lng = float(data.get("lng", -73.5673))
+        except (ValueError, TypeError):
+            cur_lat, cur_lng = 45.5017, -73.5673
+
+    new_lat, new_lng = nudge_coords(cur_lat, cur_lng, direction, step_m)
+    try:
+        if session and session.state == "active":
+            snap = engine.update(device_id, {"mode": "fixed", "lat": new_lat, "lng": new_lng})
+        else:
+            snap = engine.start(device_id, {"mode": "fixed", "lat": new_lat, "lng": new_lng})
+    except Exception as e:
+        return jsonify(error=f"Could not nudge location: {e}"), 500
+
+    return jsonify(snapshot=snap, lat=new_lat, lng=new_lng)
 
 
 @app.post("/api/start")
@@ -499,18 +598,23 @@ def api_offline_clear():
 
 def main():
     parser = argparse.ArgumentParser(description="Geox — GPS spoofer for connected phones")
-    parser.add_argument("--host", default="127.0.0.1")
+    parser.add_argument("--host", default="0.0.0.0")
     parser.add_argument("--port", type=int, default=7876)
     parser.add_argument("--no-open", action="store_true", help="don't open the browser")
     args = parser.parse_args()
 
-    url = f"http://{args.host}:{args.port}"
+    app.server_port = args.port
+    local_ip = get_local_ip()
+    local_url = f"http://127.0.0.1:{args.port}"
+    remote_url = f"http://{local_ip}:{args.port}/remote"
+
     print("=" * 60)
-    print(f"  Geox running → {url}")
+    print(f"  Geox running locally -> {local_url}")
+    print(f"  Phone Remote Web App -> {remote_url}")
     print("  Keep this window open while spoofing.")
     print("=" * 60)
     if not args.no_open:
-        threading.Timer(1.5, lambda: webbrowser.open(url)).start()
+        threading.Timer(1.5, lambda: webbrowser.open(local_url)).start()
     try:
         try:
             from waitress import serve

@@ -22,6 +22,8 @@ You are in Vancouver. Everyone checking your location sees you at McMurdo Statio
 - **Draw mode.** Click waypoints on the map and travel between them at a speed you choose.
 - **Wireless Wi-Fi mode.** Control phone movement, live trips, and roam completely cable-free over local Wi-Fi without needing a USB cable.
 - **Unplug & Go (Location Lock).** Lock a location on your phone and unplug the cable. The device persistently retains the mock location at operating-system level wherever you take it.
+- **Phone Remote Web App.** Control and change your location directly from your phone! Click 'Phone Remote' in the header, scan the QR code with your camera or open `http://<pc-ip>:7876/remote` in Safari/Chrome. Features a touch-enabled map, address search, presets, and a real-time virtual joystick D-pad.
+- **Standalone Android On-Phone Control.** Android users can also change their location directly on the device with zero PC connection using Geox Bridge's built-in 'Set Location On-Phone' picker.
 - **iPhone, iOS 15 through current.** Uses Apple's own Instruments location-simulation channel (the mechanism Xcode uses), including the iOS 17+ tunnel. Nothing is installed on the phone.
 - **Android.** Official mock-location provider via a tiny companion app, driven over ADB.
 - **Self-installing.** `run_geox.bat` needs no Python and no admin rights: the first run downloads everything automatically. Zip the folder and share it as-is.

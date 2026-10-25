@@ -99,6 +99,11 @@ On modern iOS the developer channel runs through an encrypted tunnel that Geox e
 - **iPhone:** The mock location fix is set into Apple CoreLocation. When unplugged, iOS retains the simulated location persistently across all apps until the phone reboots or you stop it.
 - **Android:** Geox Bridge automatically launches its persistent background `MockService` foreground service, continuously reinforcing the mock GPS fix every 1.5 seconds on-device even when completely disconnected from ADB and your PC.
 
+**Phone Remote Web App (Control from Phone).** You can change and steer your phone's location directly from your phone screen:
+- **Mobile Web App (`/remote`):** Click the **Phone Remote** button in the Geox desktop header. It displays a QR code and a local network URL (e.g. `http://192.168.1.50:7876/remote`). Point your iPhone or Android camera at the QR code to open the web app. You can search any city, tap anywhere on the touch map, switch presets, or use the interactive virtual joystick D-pad (North, South, East, West) to walk your phone's location in real time.
+- **Add to Home Screen (PWA):** On iPhone Safari, tap *Share -> Add to Home Screen*. On Android Chrome, tap *Menu -> Install app*. It launches like a native app.
+- **Standalone Android On-Phone Control:** On Android, you can also open the `Geox Bridge` companion app directly on your phone, tap **Set Location On-Phone**, and pick coordinates or presets with zero PC connection needed.
+
 **Movement.** A frozen pin is suspicious. Geox can move:
 
 | Mode | What the phone reports |
@@ -204,6 +209,10 @@ Geox/
 **Does the phone need to stay plugged in?** No. You have two options:
 1. **Wireless Wi-Fi Mode:** Control your phone, live routes, and roam cable-free over your local Wi-Fi network without keeping the USB cable connected.
 2. **Unplug & Go (Location Lock):** Tick "Unplug & Go (Lock Location)", click START SPOOFING, and unplug the cable. The location stays locked on the device at OS level even when completely disconnected and taken away from your PC.
+
+**Can I change location directly from my phone?** Yes!
+1. **From Any Phone (iPhone or Android):** Open `http://<pc-ip>:7876/remote` in Safari or Chrome (or scan the QR code by clicking "Phone Remote" in Geox desktop). You get a full mobile web app with a touch map, place search, presets, and an interactive virtual joystick D-pad to steer your location from your phone screen.
+2. **Standalone on Android:** Open the Geox Bridge app and tap "Set Location On-Phone" to change coordinates anywhere on the go without a PC.
 
 **Does anything get installed on my iPhone?** No. Nothing is installed; it uses Apple's built-in developer mechanism.
 

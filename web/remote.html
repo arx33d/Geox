@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Geox Remote">
+  <meta name="theme-color" content="#0a0a0b">
+  <title>Geox Mobile Remote</title>
+  <link rel="icon" type="image/x-icon" href="favicon.ico">
+  <link rel="stylesheet" href="vendor/leaflet/leaflet.css">
+  <style>
+    :root {
+      --bg: #0a0a0b;
+      --card: #131316;
+      --card-subtle: #1a1a20;
+      --border: #26262c;
+      --text: #f4f4f6;
+      --text-muted: #8e8e98;
+      --green: #22c55e;
+      --green-dark: #15803d;
+      --red: #ef4444;
+      --red-dark: #b91c1c;
+      --blue: #3b82f6;
+      --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      height: 100vh;
+      height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    header {
+      background: var(--card);
+      border-bottom: 1px solid var(--border);
+      padding: 10px 14px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      z-index: 1000;
+      flex-shrink: 0;
+    }
+
+    .brand {
+      font-size: 15px;
+      font-weight: 800;
+      letter-spacing: 0.12em;
+      color: var(--green);
+    }
+
+    .device-select-wrap {
+      flex: 1;
+      position: relative;
+    }
+
+    select#deviceSelect {
+      width: 100%;
+      background: var(--card-subtle);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 6px 8px;
+      font-size: 12px;
+      outline: none;
+    }
+
+    .status-badge {
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      padding: 3px 7px;
+      border-radius: 4px;
+      background: var(--card-subtle);
+      color: var(--text-muted);
+      border: 1px solid var(--border);
+      white-space: nowrap;
+    }
+
+    .status-badge.active {
+      background: rgba(34, 197, 94, 0.15);
+      color: var(--green);
+      border-color: rgba(34, 197, 94, 0.4);
+    }
+
+    .status-badge.locked {
+      background: rgba(59, 130, 246, 0.15);
+      color: var(--blue);
+      border-color: rgba(59, 130, 246, 0.4);
+    }
+
+    /* Search & Presets */
+    .search-panel {
+      background: var(--card);
+      border-bottom: 1px solid var(--border);
+      padding: 8px 12px;
+      z-index: 999;
+      flex-shrink: 0;
+      position: relative;
+    }
+
+    .search-input-wrap {
+      position: relative;
+    }
+
+    input#searchInput {
+      width: 100%;
+      background: var(--card-subtle);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 8px 12px;
+      border-radius: 8px;
+      font-size: 13px;
+      outline: none;
+    }
+
+    input#searchInput:focus {
+      border-color: var(--green);
+    }
+
+    .suggestions {
+      position: absolute;
+      top: 100%;
+      left: 0;
+      right: 0;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      margin-top: 4px;
+      max-height: 200px;
+      overflow-y: auto;
+      z-index: 10000;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+    }
+
+    .suggestion-item {
+      padding: 9px 12px;
+      font-size: 12px;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+      cursor: pointer;
+    }
+
+    .suggestion-item:active {
+      background: var(--card-subtle);
+    }
+
+    .presets-bar {
+      display: flex;
+      gap: 6px;
+      overflow-x: auto;
+      padding-top: 8px;
+      scrollbar-width: none;
+    }
+
+    .presets-bar::-webkit-scrollbar {
+      display: none;
+    }
+
+    .preset-chip {
+      background: var(--card-subtle);
+      color: var(--text-muted);
+      border: 1px solid var(--border);
+      padding: 4px 9px;
+      border-radius: 12px;
+      font-size: 11px;
+      white-space: nowrap;
+      cursor: pointer;
+    }
+
+    .preset-chip:active {
+      background: var(--border);
+      color: var(--text);
+    }
+
+    /* Map Area */
+    #mapContainer {
+      flex: 1;
+      position: relative;
+      width: 100%;
+      overflow: hidden;
+    }
+
+    #map {
+      width: 100%;
+      height: 100%;
+      background: #111;
+    }
+
+    .map-fab-bar {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      z-index: 500;
+    }
+
+    .map-fab {
+      background: var(--card);
+      border: 1px solid var(--border);
+      color: var(--text);
+      width: 38px;
+      height: 38px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+      cursor: pointer;
+    }
+
+    .map-fab:active {
+      background: var(--card-subtle);
+    }
+
+    .coords-pill {
+      position: absolute;
+      bottom: 10px;
+      left: 10px;
+      background: rgba(19, 19, 22, 0.85);
+      backdrop-filter: blur(8px);
+      border: 1px solid var(--border);
+      padding: 4px 8px;
+      border-radius: 6px;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--green);
+      z-index: 500;
+    }
+
+    /* D-Pad Floating Widget */
+    .dpad-panel {
+      position: absolute;
+      bottom: 12px;
+      right: 12px;
+      background: rgba(19, 19, 22, 0.92);
+      backdrop-filter: blur(8px);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 8px;
+      display: grid;
+      grid-template-columns: repeat(3, 38px);
+      grid-template-rows: repeat(3, 38px);
+      gap: 4px;
+      z-index: 500;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+    }
+
+    .dpad-btn {
+      background: var(--card-subtle);
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .dpad-btn:active {
+      background: var(--green);
+      color: #000;
+      border-color: var(--green);
+    }
+
+    .dpad-center {
+      font-size: 9px;
+      color: var(--text-muted);
+      text-align: center;
+      line-height: 1.1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: transparent;
+      border: none;
+      cursor: pointer;
+    }
+
+    /* Controls Bar */
+    .controls-panel {
+      background: var(--card);
+      border-top: 1px solid var(--border);
+      padding: 10px 14px;
+      flex-shrink: 0;
+      z-index: 1000;
+    }
+
+    .mode-row {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 10px;
+    }
+
+    .mode-pill {
+      flex: 1;
+      background: var(--card-subtle);
+      color: var(--text-muted);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 6px 0;
+      font-size: 11px;
+      font-weight: 600;
+      text-align: center;
+      cursor: pointer;
+    }
+
+    .mode-pill.active {
+      background: rgba(34, 197, 94, 0.15);
+      color: var(--green);
+      border-color: rgba(34, 197, 94, 0.5);
+    }
+
+    .action-row {
+      display: flex;
+      gap: 8px;
+    }
+
+    .btn-apply {
+      flex: 2;
+      background: var(--green);
+      color: #000;
+      font-weight: 700;
+      border: none;
+      border-radius: 8px;
+      padding: 12px;
+      font-size: 14px;
+      cursor: pointer;
+      text-align: center;
+    }
+
+    .btn-apply:active {
+      background: var(--green-dark);
+    }
+
+    .btn-stop {
+      flex: 1;
+      background: var(--red);
+      color: #fff;
+      font-weight: 700;
+      border: none;
+      border-radius: 8px;
+      padding: 12px;
+      font-size: 13px;
+      cursor: pointer;
+      text-align: center;
+    }
+
+    .btn-stop:active {
+      background: var(--red-dark);
+    }
+
+    .hidden {
+      display: none !important;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top Nav -->
+  <header>
+    <div class="brand">GEOX</div>
+    <div class="device-select-wrap">
+      <select id="deviceSelect">
+        <option value="">Searching for devices...</option>
+      </select>
+    </div>
+    <div id="statusBadge" class="status-badge">Idle</div>
+  </header>
+
+  <!-- Search & Presets -->
+  <div class="search-panel">
+    <div class="search-input-wrap">
+      <input id="searchInput" type="search" placeholder="Search city or place..." autocomplete="off">
+      <div id="suggestions" class="suggestions hidden"></div>
+    </div>
+    <div class="presets-bar">
+      <div class="preset-chip" data-lat="35.6762" data-lng="139.6503">Tokyo</div>
+      <div class="preset-chip" data-lat="48.8566" data-lng="2.3522">Paris</div>
+      <div class="preset-chip" data-lat="40.7128" data-lng="-74.0060">New York</div>
+      <div class="preset-chip" data-lat="51.5074" data-lng="-0.1278">London</div>
+      <div class="preset-chip" data-lat="-77.8419" data-lng="166.6863">McMurdo</div>
+      <div class="preset-chip" data-lat="-33.8688" data-lng="151.2093">Sydney</div>
+      <div class="preset-chip" data-lat="21.3069" data-lng="-157.8583">Honolulu</div>
+    </div>
+  </div>
+
+  <!-- Interactive Touch Map -->
+  <div id="mapContainer">
+    <div id="map"></div>
+
+    <div class="map-fab-bar">
+      <button id="recenterBtn" class="map-fab" title="Recenter on Pin" aria-label="Recenter">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="8"></circle>
+          <line x1="12" y1="2" x2="12" y2="4"></line>
+          <line x1="12" y1="20" x2="12" y2="22"></line>
+          <line x1="2" y1="12" x2="4" y2="12"></line>
+          <line x1="20" y1="12" x2="22" y2="12"></line>
+        </svg>
+      </button>
+      <button id="layerToggleBtn" class="map-fab" title="Toggle Map Layer" aria-label="Layer">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polygon points="12 2 2 7 12 12 22 7 12 2"></polygon>
+          <polyline points="2 17 12 22 22 17"></polyline>
+          <polyline points="2 12 12 17 22 12"></polyline>
+        </svg>
+      </button>
+      <button id="dpadToggleBtn" class="map-fab" title="Toggle Joystick D-Pad" aria-label="D-Pad">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polygon points="12 4 15 9 9 9 12 4"></polygon>
+          <polygon points="12 20 15 15 9 15 12 20"></polygon>
+          <polygon points="4 12 9 9 9 15 4 12"></polygon>
+          <polygon points="20 12 15 9 15 15 20 12"></polygon>
+        </svg>
+      </button>
+    </div>
+
+    <div id="coordsPill" class="coords-pill">45.501700, -73.567300</div>
+
+    <!-- Virtual Joystick / D-Pad -->
+    <div id="dpadPanel" class="dpad-panel">
+      <div></div>
+      <button id="dpadNorth" class="dpad-btn" title="North">N</button>
+      <div></div>
+      <button id="dpadWest" class="dpad-btn" title="West">W</button>
+      <button id="dpadStep" class="dpad-center" title="Step Size">10m</button>
+      <button id="dpadEast" class="dpad-btn" title="East">E</button>
+      <div></div>
+      <button id="dpadSouth" class="dpad-btn" title="South">S</button>
+      <div></div>
+    </div>
+  </div>
+
+  <!-- Bottom Controls -->
+  <div class="controls-panel">
+    <div class="mode-row">
+      <div class="mode-pill active" data-mode="fixed">Stay</div>
+      <div class="mode-pill" data-mode="jitter">Roam</div>
+      <div class="mode-pill" data-mode="lock">Unplug & Go</div>
+    </div>
+    <div class="action-row">
+      <button id="applyBtn" class="btn-apply">Spoof Location</button>
+      <button id="stopBtn" class="btn-stop">Restore GPS</button>
+    </div>
+  </div>
+
+  <script src="vendor/leaflet/leaflet.js"></script>
+  <script src="remote.js"></script>
+</body>
+</html>
