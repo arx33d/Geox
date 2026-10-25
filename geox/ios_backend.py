@@ -39,6 +39,13 @@ _IOS_DETAILS: dict = {}
 _IOS_DETAILS_TTL = 10.0
 
 
+def _norm_name(name):
+    if not name:
+        return ""
+    clean = str(name).replace(".local", "")
+    return re.sub(r'[\s\(\)\-_.]', '', clean).lower()
+
+
 class IosError(Exception):
     """User-actionable iOS failure."""
 
@@ -386,6 +393,9 @@ async def _scan(engine):
         devices.append(info)
 
     seen_serials = {d["id"] for d in devices}
+    seen_hosts = set()
+    seen_ips = set()
+    seen_names = {_norm_name(d.get("name")) for d in devices if d.get("name")}
 
     # Discover untethered Wi-Fi devices via Bonjour RemotePairing (iOS 17+)
     try:
@@ -404,14 +414,25 @@ async def _scan(engine):
 
         if alt_irks:
             async for answer in iter_browse_remotepairing(timeout=0.6):
+                host = (getattr(answer, "host", "") or "").lower()
+                if host:
+                    seen_hosts.add(host)
+                    seen_names.add(_norm_name(host))
+                for addr in getattr(answer, "addresses", []) or []:
+                    ip = getattr(addr, "ip", None)
+                    if ip:
+                        seen_ips.add(ip)
+
                 matched = _match_remote_pair_record(answer, alt_irks)
                 if matched and matched not in seen_serials:
                     seen_serials.add(matched)
                     cached = _IOS_DETAILS.get(matched)
                     name = cached[1].get("name") if cached else None
                     os_ver = cached[1].get("os_version") if cached else None
-                    if not name and getattr(answer, "host", None):
+                    if not name and host:
                         name = answer.host.replace(".local", "").replace("-", " ")
+                    if name:
+                        seen_names.add(_norm_name(name))
                     devices.append({
                         "id": matched,
                         "platform": "ios",
@@ -431,22 +452,38 @@ async def _scan(engine):
     try:
         from pymobiledevice3.bonjour import iter_browse_mobdev2
         async for item in iter_browse_mobdev2(timeout=0.4):
+            host = (getattr(item, "host", "") or "").lower()
+            if host and (host in seen_hosts or _norm_name(host) in seen_names):
+                continue
+            item_ips = {getattr(a, "ip", None) for a in getattr(item, "addresses", []) or []}
+            if item_ips & seen_ips:
+                continue
+
             props = getattr(item, "properties", {}) or {}
             mob_id = props.get("identifier") or props.get("SerialNumber") or getattr(item, "host", None)
             matched_udid = None
             for udid, det in _IOS_DETAILS.items():
                 if udid in seen_serials:
                     continue
-                if det[1].get("host") == getattr(item, "host", None) or det[1].get("name") == getattr(item, "host", "").replace(".local", "").replace("-", " "):
+                d_name = _norm_name(det[1].get("name"))
+                if d_name and (d_name == _norm_name(host) or d_name == _norm_name(mob_id)):
                     matched_udid = udid
                     break
             dev_id = matched_udid or mob_id
-            if dev_id and dev_id not in seen_serials:
+            if dev_id and dev_id not in seen_serials and _norm_name(dev_id) not in seen_names:
                 seen_serials.add(dev_id)
+                if host:
+                    seen_hosts.add(host)
+                    seen_names.add(_norm_name(host))
+                seen_ips.update(filter(None, item_ips))
                 cached = _IOS_DETAILS.get(dev_id)
                 name = cached[1].get("name") if cached else None
                 if not name and getattr(item, "host", None):
                     name = item.host.replace(".local", "").replace("-", " ")
+                if name:
+                    if _norm_name(name) in seen_names:
+                        continue
+                    seen_names.add(_norm_name(name))
                 devices.append({
                     "id": dev_id,
                     "platform": "ios",

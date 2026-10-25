@@ -902,6 +902,18 @@ function deviceBadges(d) {
 
 function renderDevices() {
   const el = $("deviceList");
+  // Defensive deduplication by platform + normalized device name
+  const deduped = [];
+  const seenKeys = new Set();
+  for (const d of (state.devices || [])) {
+    const norm = (d.name || d.id || "").replace(".local", "").replace(/[\s\(\)\-_.]/g, "").toLowerCase();
+    const key = (d.platform || "") + ":" + norm;
+    if (seenKeys.has(key)) continue;
+    seenKeys.add(key);
+    deduped.push(d);
+  }
+  state.devices = deduped;
+
   if (!state.devices.length) {
     el.innerHTML = `<div class="empty">No phones detected. Plug one in with USB, unlock it,
       accept any trust/USB-debugging prompts, then hit Refresh.</div>`;

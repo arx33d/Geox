@@ -1,6 +1,7 @@
 """Session manager: device discovery + one spoofing session per device."""
 
 import os
+import re
 import subprocess
 import threading
 import time
@@ -140,10 +141,42 @@ class Engine:
             except Exception as e:
                 self.log(f"[Android] scan error: {e}", "error")
             with self._lock:
+                deduped = []
+                seen_ids = set()
+                seen_keys = set()
                 for d in devices:
-                    s = self.sessions.get(d["id"])
+                    did = d.get("id")
+                    norm = re.sub(r'[\s\(\)\-_.]', '', (d.get("name") or "").replace(".local", "")).lower()
+                    key = (d.get("platform"), norm) if norm else None
+
+                    s = self.sessions.get(did)
                     d["active"] = bool(s and s.state == "active")
                     d["session_state"] = s.state if s else None
+
+                    if did in seen_ids:
+                        continue
+
+                    if key and key in seen_keys:
+                        # Duplicate device detected on same platform with matching name
+                        existing_idx = next((i for i, x in enumerate(deduped) if (x.get("platform"), re.sub(r'[\s\(\)\-_.]', '', (x.get("name") or "").replace(".local", "")).lower()) == key), None)
+                        if existing_idx is not None:
+                            existing = deduped[existing_idx]
+                            should_replace = (
+                                not existing.get("active") and d.get("active")
+                            ) or (
+                                existing.get("connection") != "USB" and d.get("connection") == "USB"
+                            ) or (
+                                not existing.get("os_version") and d.get("os_version")
+                            )
+                            if should_replace:
+                                deduped[existing_idx] = d
+                        continue
+
+                    seen_ids.add(did)
+                    if key:
+                        seen_keys.add(key)
+                    deduped.append(d)
+                devices = deduped
             self._devices_cache = devices
             return devices
 

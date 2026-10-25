@@ -395,6 +395,21 @@ class TestOfflineCapabilities(unittest.TestCase):
         self.assertIsNone(snap["error"])
         self.assertEqual(snap["engine"], "mock-provider")
 
+    def test_device_deduplication(self):
+        from unittest.mock import patch
+        from geox import ios_backend, android_backend
+        engine = Engine()
+        mock_devices = [
+            {"id": "00008110-001244E91432401E", "name": "Iphone (2)", "platform": "ios", "connection": "Wi-Fi", "os_version": "27.0.1"},
+            {"id": "ephemeral-mobdev-id", "name": "Iphone 2", "platform": "ios", "connection": "Wi-Fi", "os_version": None},
+        ]
+        with patch.object(ios_backend, "list_devices", return_value=mock_devices), \
+             patch.object(android_backend, "list_devices", return_value=[]):
+            devs = engine.scan_devices(force=True)
+            self.assertEqual(len(devs), 1)
+            self.assertEqual(devs[0]["id"], "00008110-001244E91432401E")
+            self.assertEqual(devs[0]["os_version"], "27.0.1")
+
 
 if __name__ == "__main__":
     unittest.main()
