@@ -3,9 +3,12 @@
 **Change the GPS location of a phone connected to your PC or over Wi-Fi, and every app on it believes it.**
 Plug an iPhone or Android into the computer with a USB cable or connect wirelessly over Wi-Fi, pick any spot on a map, and the phone reports that location at operating-system level.
 
+[![CI](https://github.com/arx33dbu/geox-BU/actions/workflows/ci.yml/badge.svg)](https://github.com/arx33dbu/geox-BU/actions/workflows/ci.yml)
+[![CodeQL](https://github.com/arx33dbu/geox-BU/actions/workflows/codeql.yml/badge.svg)](https://github.com/arx33dbu/geox-BU/actions/workflows/codeql.yml)
+[![Version](https://img.shields.io/badge/version-1.0.0-green.svg)](https://github.com/arx33dbu/geox-BU/releases)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/)
 [![License: MIT + Commons Clause](https://img.shields.io/badge/License-MIT_%2B_Commons_Clause-blue.svg)](LICENSE)
-
-![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)
+[![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-lightgrey)](https://github.com/arx33dbu/geox-BU)
 
 
 Plug an iPhone or Android into the computer with a USB cable or connect wirelessly over Wi-Fi, pick any spot on a map, and the phone reports that location at operating-system level: Find My, Snap Map, Google Maps, WhatsApp live location, everything.
@@ -191,10 +194,13 @@ On **Android**, the Geox Bridge companion app receives coordinates over ADB and 
 
 The long version (architecture, setup walkthroughs, what can still give you away, troubleshooting, FAQ) is in **[EXPLANATION.md](EXPLANATION.md)**.
 
-## Documentation
+## Documentation & Community
 
-- [EXPLANATION.md](EXPLANATION.md): everything about setup, internals, realism tips, troubleshooting and the FAQ
-- [android-bridge/README.md](android-bridge/README.md): building the Android companion app
+- [EXPLANATION.md](EXPLANATION.md): Complete guide covering setup, internals, realism tips, troubleshooting, and FAQ.
+- [CONTRIBUTING.md](CONTRIBUTING.md): Developer setup, coding standards, Conventional Commits, and test guidelines.
+- [SECURITY.md](SECURITY.md): Vulnerability reporting procedures, response SLA, and security design.
+- [ROADMAP.md](ROADMAP.md): Project roadmap, upcoming features, and milestones.
+- [android-bridge/README.md](android-bridge/README.md): Building and deploying the Android companion bridge.
 
 ## Disclaimer
 

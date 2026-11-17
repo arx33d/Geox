@@ -1,0 +1,78 @@
+name: Bug Report
+description: Report an issue or unexpected behavior in Geox
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for reporting an issue. Please fill in the details below to help us diagnose and fix the problem.
+
+  - type: input
+    id: version
+    attributes:
+      label: Geox Version
+      description: What version of Geox are you running (e.g. 1.0.0, commit hash, or zip release)?
+      placeholder: "1.0.0"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating System
+      options:
+        - Windows 11
+        - Windows 10
+        - macOS
+        - Linux
+    validations:
+      required: true
+
+  - type: input
+    id: device
+    attributes:
+      label: Connected Device & OS Version
+      description: Phone model and iOS/Android version (e.g. iPhone 13 on iOS 17.4, Pixel 7 on Android 14)
+      placeholder: "iPhone 13, iOS 17.4"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: connection
+    attributes:
+      label: Connection Type
+      options:
+        - USB Cable
+        - Wireless (Wi-Fi)
+        - Both
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Describe the Bug
+      description: A clear and concise description of what happened.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to Reproduce
+      description: Step-by-step instructions to reproduce the issue.
+      placeholder: |
+        1. Connect iPhone with USB
+        2. Double click Geox.exe
+        3. Enter location 'Paris'
+        4. See error...
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Terminal Logs / Error Output
+      description: Paste any error messages or tracebacks here.
+      render: shell

@@ -1,0 +1,82 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "geox"
+version = "1.0.0"
+description = "GPS location spoofer for USB and Wi-Fi connected iPhones and Android devices"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT with Commons Clause Condition v1.0" }
+authors = [
+    { name = "arx33d", email = "arx33dbu@gmail.com" }
+]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Environment :: Win32 (MS Windows)",
+    "Environment :: MacOS X",
+    "Environment :: X11 Applications",
+    "Framework :: Flask",
+    "Intended Audience :: Developers",
+    "Intended Audience :: End Users/Desktop",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Testing",
+    "Topic :: Scientific/Engineering :: GIS",
+]
+dependencies = [
+    "flask>=3.0",
+    "waitress>=3.0",
+    "requests>=2.31",
+    "pymobiledevice3>=11.0",
+    "gpxpy>=1.6",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "ruff>=0.4",
+    "mypy>=1.9",
+    "black>=24.0",
+]
+
+[project.scripts]
+geox = "geox.cli:main"
+geox-server = "geox.server:main"
+
+[tool.setuptools.packages.find]
+include = ["geox*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "UP",  # pyupgrade
+    "B",   # flake8-bugbear
+]
+ignore = [
+    "E501", # line too long (handled by formatter)
+    "B008", # function call in argument defaults
+    "UP007", # union type annotations
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = "-v --strict-markers"
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_configs = true
+ignore_missing_imports = true
