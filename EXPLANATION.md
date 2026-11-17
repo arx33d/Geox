@@ -220,6 +220,13 @@ Geox/
 1. **Wireless Wi-Fi Mode:** Control your phone, live routes, and roam cable-free over your local Wi-Fi network without keeping the USB cable connected.
 2. **Unplug & Go (Location Lock):** Tick "Unplug & Go (Lock Location)", click START SPOOFING, and unplug the cable. The location stays locked on the device at OS level even when completely disconnected and taken away from your PC.
 
+**Can I leave the house with my phone while my laptop stays at home?** Yes! Use **Unplug & Go**:
+1. While at home, connect your phone and choose your destination.
+2. Tick **Unplug & Go (Lock Location)** and click **START SPOOFING**.
+3. Once the status shows **LOCKED (UNPLUGGED)**, unplug your phone.
+4. You can leave the house, disconnect from Wi-Fi/Bluetooth, and switch to 4G/5G cellular data. The fake location stays frozen on the device for all apps (Find My, Life360, Snapchat, Google Maps, Tinder).
+5. To return to real GPS, simply restart your phone or reconnect to Geox and click **STOP**.
+
 **Can I change location directly from my phone?** Yes!
 1. **From Any Phone (iPhone or Android):** Open `http://<pc-ip>:7876/remote` in Safari or Chrome (or scan the QR code by clicking "Phone Remote" in Geox desktop). You get a full mobile web app with a touch map, place search, presets, and an interactive virtual joystick D-pad to steer your location from your phone screen.
 2. **Standalone on Android:** Open the Geox Bridge app and tap "Set Location On-Phone" to change coordinates anywhere on the go without a PC.

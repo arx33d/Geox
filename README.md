@@ -47,6 +47,88 @@ That is all you need to run Geox. You do not need to install anything or run set
 | `GeoxSetup.exe` | Windows Installer | Only if you want to install Geox to Start Menu and Desktop shortcuts |
 | `run_geox.sh` | Shell Script | For Linux and macOS users only |
 
+---
+
+## Step-by-Step Guide: How to Use Geox (Anyone Can Follow)
+
+Follow these simple steps from start to finish. No technical experience required.
+
+### Step 1: First-Time Phone Setup (2 Minutes)
+
+#### For iPhone:
+1. **Apple Drivers**: Install the free **Apple Devices** app from the Microsoft Store (or iTunes from Apple). Geox launches this service automatically.
+2. **Connect Phone**: Plug your iPhone into your PC with a USB cable.
+3. **Trust This PC**: Unlock your iPhone screen and tap **Trust** when prompted, then enter your passcode.
+4. **Developer Mode (iOS 16 & newer)**:
+   - On your iPhone, open **Settings -> Privacy & Security -> Developer Mode**.
+   - Toggle it **ON**. Your iPhone will ask to restart.
+   - After restarting, unlock the phone and tap **Turn On** when prompted.
+   *(If the switch is not visible in Settings yet, Geox will reveal it automatically when you click Start).*
+
+#### For Android:
+1. **Enable Developer Options**: Open **Settings -> About Phone**, then tap **Build Number** 7 times.
+2. **Enable USB Debugging**: Open **Settings -> Developer Options**, and turn **USB Debugging** to **ON**.
+3. **Connect Phone**: Plug your Android into your PC with a USB cable and tap **Allow** on the phone screen.
+4. **Install Bridge**: In the Geox web interface, click **Install ADB** and **Setup Bridge**. Geox configures permissions automatically.
+
+---
+
+### Step 2: Starting Geox
+1. Double-click **`START_GEOX.bat`** (or **`Geox.exe`**).
+2. The Geox control window will open and automatically launch the Web App in your browser at `http://localhost:7876`.
+3. Keep the launcher window open while using Geox.
+
+---
+
+### Step 3: Spoofing Your Location (Standard Mode)
+1. **Pick Device (Step 1)**: Click on your phone in the left list (e.g., `iPhone` or your Android name).
+2. **Choose Destination (Step 2)**:
+   - Type an address, landmark, or city in the search bar and click **Go**.
+   - Or click anywhere on the world map and drag the green pin.
+   - Or pick a preset (e.g., McMurdo Station, Antarctica).
+3. **Choose Movement (Step 3)**:
+   - **Stay**: Holds your phone locked at that exact spot.
+   - **Roam**: Simulates natural walking movement around the area so your pin looks alive.
+   - **Trip**: Follows real road directions with realistic car, bike, or walking speeds.
+4. **Start**: Click **START SPOOFING**.
+   - Open Apple Maps, Google Maps, Find My, or Snapchat on your phone to confirm your location changed!
+5. **Stop**: Click the red **STOP** button at any time to restore your phone to real GPS.
+
+---
+
+### Step 4: Going Cable-Free (Wi-Fi Mode)
+You do not need to keep your phone plugged into USB:
+1. While connected via USB, make sure your phone and PC are on the **same Wi-Fi network**.
+2. Click **Go Wireless** (or **Wireless Mode** -> **Enable Cable-Free Wi-Fi & Unplug**).
+3. Once paired, you can **unplug the USB cable**.
+4. Your phone will now show a `Wi-Fi` badge in Geox. You can change locations, roam, and run trips completely wireless.
+
+---
+
+### Step 5: Unplug & Go (Leave the House with Fake GPS on 4G/5G)
+Want to leave the house, go out in the real world, and keep your phone locked at the fake location?
+1. Connect your phone (via USB or Wi-Fi).
+2. Choose your destination on the map.
+3. Check the box **"Unplug & Go (Lock Location)"**.
+4. Click **START SPOOFING**.
+5. The status badge will show **`LOCKED (UNPLUGGED)`**.
+6. **Unplug your phone, turn off Wi-Fi/Bluetooth, and take your phone anywhere on cellular data (4G/5G)**.
+   - Every app on your phone (Find My, Life360, Snapchat, Tinder, Maps) will show the fake location.
+   - The fake location stays active everywhere you go.
+7. **To return to real GPS**: Simply restart your phone, or reconnect to Geox and click **STOP**.
+
+---
+
+### Step 6: Control from Your Phone Screen (Geox Remote)
+You can change your fake location directly from your phone's touchscreen without touching the PC:
+1. In the Geox desktop app header, click **Phone Remote**.
+2. A QR code and local URL (e.g., `http://192.168.x.x:7876/remote`) will appear.
+3. Open your phone camera, scan the QR code, and open the page in Safari or Chrome.
+4. *(Optional)* Tap **Share -> Add to Home Screen** on iPhone, or **Install App** on Android to use it like a full-screen mobile app.
+5. Tap anywhere on the mobile map, search places, or use the on-screen joystick arrows to walk around in real time.
+
+---
+
 ### Other Ways to Install:
 
 - **One-Click PowerShell Install**: Open PowerShell and run `irm https://raw.githubusercontent.com/arx33d/Geox/main/install.ps1 | iex`
@@ -96,7 +178,7 @@ The `run_geox.sh` file is only for macOS, Linux and Git Bash users. Windows user
 
 | Platform | Needed once |
 |---|---|
-| **iPhone** | Apple's USB drivers (the *Apple Devices* app from the Microsoft Store, or iTunes; Geox starts the service for you), *Trust this computer*, Developer Mode ON (Geox reveals the switch and walks you through it). And VS community/professional/insider with the C++ module |
+| **iPhone** | Apple's USB drivers (the *Apple Devices* app from the Microsoft Store, or iTunes; Geox starts the service for you), *Trust this computer*, Developer Mode ON (Geox reveals the switch and walks you through it). |
 | **Android** | USB debugging enabled; build the `Geox Bridge` app once from [`android-bridge/`](android-bridge) (about 10 minutes with Android Studio), then press *Setup bridge* and Geox installs and configures it by itself |
 
 ## How it works
