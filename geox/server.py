@@ -624,6 +624,30 @@ def main():
             app.run(host=args.host, port=args.port, threaded=True, debug=False)
     except KeyboardInterrupt:
         pass
+    except OSError as e:
+        is_port_in_use = (
+            "10048" in str(e)
+            or "already in use" in str(e).lower()
+            or "address already in use" in str(e).lower()
+            or getattr(e, "winerror", None) == 10048
+            or getattr(e, "errno", None) in (10048, 48, 98)
+        )
+        if is_port_in_use:
+            print(f"\n[Geox] Port {args.port} is already in use by an active Geox process.")
+            print(f"Opening browser at {local_url}...")
+            if not args.no_open:
+                try:
+                    webbrowser.open(local_url)
+                except Exception:
+                    pass
+            print("Press Ctrl+C to exit.")
+            try:
+                while True:
+                    time.sleep(1)
+            except KeyboardInterrupt:
+                pass
+            return
+        raise
     finally:
         for sid in list(engine.sessions.keys()):
             try:

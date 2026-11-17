@@ -17,7 +17,7 @@ if exist ".venv\Scripts\python.exe" (
     echo Verifying Geox components...
     ".venv\Scripts\python.exe" -m pip install --quiet --disable-pip-version-check -r requirements.txt
   )
-  ".venv\Scripts\python.exe" -m geox.launch
+  ".venv\Scripts\python.exe" -m geox.launch %*
   goto done
 )
 
@@ -28,7 +28,7 @@ if exist "runtime\python.exe" (
     echo Verifying Geox components...
     "runtime\python.exe" -m pip install --quiet --disable-pip-version-check -r requirements.txt
   )
-  "runtime\python.exe" -m geox.launch
+  "runtime\python.exe" -m geox.launch %*
   goto done
 )
 
@@ -74,7 +74,7 @@ if errorlevel 1 (
   pause
   goto done
 )
-"runtime\python.exe" -m geox.launch
+"runtime\python.exe" -m geox.launch %*
 goto done
 
 :venv_ready
@@ -85,7 +85,7 @@ if errorlevel 1 (
   pause
   goto done
 )
-".venv\Scripts\python.exe" -m geox.launch
+".venv\Scripts\python.exe" -m geox.launch %*
 goto done
 
 :done

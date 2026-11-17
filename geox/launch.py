@@ -37,57 +37,69 @@ def _clear():
 
 
 def _read_key():
-    if os.name == "nt":
-        import msvcrt
+    try:
+        if os.name == "nt":
+            import msvcrt
 
-        ch = msvcrt.getch()
-        if ch in (b"\x00", b"\xe0"):
-            arrow = msvcrt.getch()
-            return {"H": "up", "P": "down"}.get(arrow.decode(errors="ignore"), "")
-        if ch in (b"\r", b"\n"):
+            ch = msvcrt.getch()
+            if ch in (b"\x00", b"\xe0"):
+                arrow = msvcrt.getch()
+                return {"H": "up", "P": "down"}.get(arrow.decode(errors="ignore"), "")
+            if ch in (b"\r", b"\n"):
+                return "enter"
+            if ch == b"\x03":
+                raise KeyboardInterrupt
+            return ""
+        import termios
+        import tty
+
+        fd = sys.stdin.fileno()
+        old = termios.tcgetattr(fd)
+        try:
+            tty.setraw(fd)
+            ch = sys.stdin.read(1)
+        finally:
+            termios.tcsetattr(fd, termios.TCSADRAIN, old)
+        if ch == "\x1b":
+            return {"[A": "up", "[B": "down"}.get(sys.stdin.read(2), "")
+        if ch in ("\r", "\n"):
             return "enter"
-        if ch == b"\x03":
+        if ch == "\x03":
             raise KeyboardInterrupt
         return ""
-    import termios
-    import tty
-
-    fd = sys.stdin.fileno()
-    old = termios.tcgetattr(fd)
-    try:
-        tty.setraw(fd)
-        ch = sys.stdin.read(1)
-    finally:
-        termios.tcsetattr(fd, termios.TCSADRAIN, old)
-    if ch == "\x1b":
-        return {"[A": "up", "[B": "down"}.get(sys.stdin.read(2), "")
-    if ch in ("\r", "\n"):
+    except (KeyboardInterrupt, SystemExit):
+        raise
+    except Exception:
         return "enter"
-    if ch == "\x03":
-        raise KeyboardInterrupt
-    return ""
 
 
 def _menu(options, subtitle):
+    if not sys.stdin or not hasattr(sys.stdin, "isatty") or not sys.stdin.isatty():
+        return 0
     idx = 0
     while True:
-        _clear()
-        print(GREEN + BANNER + RESET)
-        print(f"  {BOLD}spoof the GPS of a phone connected to this PC{RESET}\n")
-        print(f"  {CYAN}{subtitle}{RESET}\n")
-        for i, opt in enumerate(options):
-            if i == idx:
-                print(f"   {GREEN}>> {opt}{RESET}")
-            else:
-                print(f"      {GREY}{opt}{RESET}")
-        print(f"\n   {GREY}up/down arrows to move - Enter to select - Ctrl+C to quit{RESET}")
-        key = _read_key()
-        if key == "up":
-            idx = (idx - 1) % len(options)
-        elif key == "down":
-            idx = (idx + 1) % len(options)
-        elif key == "enter":
-            return idx
+        try:
+            _clear()
+            print(GREEN + BANNER + RESET)
+            print(f"  {BOLD}spoof the GPS of a phone connected to this PC{RESET}\n")
+            print(f"  {CYAN}{subtitle}{RESET}\n")
+            for i, opt in enumerate(options):
+                if i == idx:
+                    print(f"   {GREEN}>> {opt}{RESET}")
+                else:
+                    print(f"      {GREY}{opt}{RESET}")
+            print(f"\n   {GREY}up/down arrows to move - Enter to select - Ctrl+C to quit{RESET}")
+            key = _read_key()
+            if key == "up":
+                idx = (idx - 1) % len(options)
+            elif key == "down":
+                idx = (idx + 1) % len(options)
+            elif key == "enter":
+                return idx
+        except (KeyboardInterrupt, SystemExit):
+            raise
+        except Exception:
+            return 0
 
 
 def main():
@@ -98,10 +110,30 @@ def main():
         rest = args[args.index("--cli") + 1:] or ["--help"]
         return cli_main(rest) or 0
 
+    if "server" in args or "--server" in args:
+        from .server import main as server_main
+
+        sys.argv = [sys.argv[0]] + [a for a in args if a not in ("server", "--server")]
+        server_main()
+        return 0
+
+    cli_subcommands = {"devices", "status", "stop", "presets", "setup-bridge"}
+    if any(a in cli_subcommands for a in args):
+        from .cli import main as cli_main
+
+        return cli_main(args) or 0
+
     if any(a.startswith("--") for a in args) and not any(a in ("--host", "--port", "--no-open") for a in args):
         from .cli import main as cli_main
 
         return cli_main(args) or 0
+
+    if not sys.stdin or not hasattr(sys.stdin, "isatty") or not sys.stdin.isatty():
+        from .server import main as server_main
+
+        sys.argv = [sys.argv[0]] + [a for a in args if a.startswith("--")]
+        server_main()
+        return 0
 
     try:
         choice = _menu(

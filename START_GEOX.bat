@@ -3,7 +3,25 @@ title Geox
 cd /d "%~dp0"
 
 if exist "%~dp0Geox.exe" (
-    "%~dp0Geox.exe" %*
+    if "%~1"=="" (
+        "%~dp0Geox.exe" server
+    ) else (
+        "%~dp0Geox.exe" %*
+    )
+    if errorlevel 1 (
+        echo.
+        echo [Geox] Application stopped with an exit code of %errorlevel%.
+        pause
+    )
 ) else (
-    call "%~dp0run_geox.bat" %*
+    if "%~1"=="" (
+        call "%~dp0run_geox.bat" server
+    ) else (
+        call "%~dp0run_geox.bat" %*
+    )
+    if errorlevel 1 (
+        echo.
+        echo [Geox] Application stopped with an exit code of %errorlevel%.
+        pause
+    )
 )

@@ -57,20 +57,40 @@ namespace Geox
 
             // Build arguments
             StringBuilder pyArgs = new StringBuilder();
-            pyArgs.Append("-m geox.launch");
-            foreach (string arg in args)
+            if (args.Length == 0)
             {
-                if (arg.Contains(" "))
+                pyArgs.Append("-m geox.server");
+            }
+            else
+            {
+                pyArgs.Append("-m geox.launch");
+                foreach (string arg in args)
                 {
-                    pyArgs.AppendFormat(" \"{0}\"", arg);
-                }
-                else
-                {
-                    pyArgs.AppendFormat(" {0}", arg);
+                    if (arg.Contains(" "))
+                    {
+                        pyArgs.AppendFormat(" \"{0}\"", arg);
+                    }
+                    else
+                    {
+                        pyArgs.AppendFormat(" {0}", arg);
+                    }
                 }
             }
 
-            return RunProcess(pythonExe, pyArgs.ToString());
+            int exitCode = RunProcess(pythonExe, pyArgs.ToString());
+            if (exitCode != 0)
+            {
+                Console.ForegroundColor = ConsoleColor.Red;
+                Console.WriteLine(string.Format("\n[Geox] Application exited with code {0}.", exitCode));
+                Console.ResetColor();
+                Console.WriteLine("Press any key to close this window...");
+                try
+                {
+                    Console.ReadKey();
+                }
+                catch { }
+            }
+            return exitCode;
         }
 
         static string ResolvePython(string baseDir)
