@@ -207,7 +207,7 @@ async def _enable_wifi_sync_async(engine, device_id):
     try:
         # Bootstrap RemotePairing record over USB for cable-free iOS 17+ support
         engine.log("[iOS] setting up wireless developer pairing…")
-        _run_cli(["--udid", device_id, "lockdown", "remotepairing", "--pair"], timeout=15)
+        _run_cli(["lockdown", "remotepairing", "--pair", "--udid", device_id], timeout=15)
     except Exception:
         pass
 
@@ -798,6 +798,16 @@ class IosCliSession:
         # reconnects), so none of them keeps asserting an old location
         for p in list(getattr(self, "_procs", [])):
             self._kill_tree(p)
+        if not self.cfg.get("unplug_lock"):
+            try:
+                sub = ["developer", "dvt", "simulate-location", "clear"]
+                if self.device.get("connection") == "Wi-Fi":
+                    sub += ["--mobdev2"]
+                if self.device.get("id"):
+                    sub += ["--udid", self.device["id"]]
+                _run_cli(sub, timeout=10)
+            except Exception:
+                pass
 
     def snapshot(self):
         last = list(self.last)
