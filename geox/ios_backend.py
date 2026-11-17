@@ -321,13 +321,14 @@ def _prepare_developer_image(engine):
     engine.log("[iOS] preparing the developer image (auto-mount, first time "
                "can take a minute)…")
     try:
-        p = _run_cli(["mounter", "auto-mount"], timeout=45)
+        p = _run_cli(["mounter", "auto-mount"], timeout=15)
     except Exception as e:
         engine.log(f"[iOS] auto-mount could not run: {e}", "warn")
+        _IMAGE_PREPARED = True
         return
+    _IMAGE_PREPARED = True
     out = (p.stdout or "") + (p.stderr or "")
     if p.returncode == 0 or "already mounted" in out.lower():
-        _IMAGE_PREPARED = True
         engine.log("[iOS] developer image mounted.", "good")
     else:
         engine.log(f"[iOS] auto-mount skipped: {_cli_failure_message(out) or out.strip()[-200:]}", "warn")
