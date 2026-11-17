@@ -8,11 +8,6 @@ if exist "%~dp0Geox.exe" (
     ) else (
         "%~dp0Geox.exe" %*
     )
-    if errorlevel 1 (
-        echo.
-        echo [Geox] Application stopped with an exit code of %errorlevel%.
-        pause
-    )
 ) else (
     if "%~1"=="" (
         call "%~dp0run_geox.bat" server
@@ -21,7 +16,7 @@ if exist "%~dp0Geox.exe" (
     )
     if errorlevel 1 (
         echo.
-        echo [Geox] Application stopped with an exit code of %errorlevel%.
+        echo [Geox] Application stopped.
         pause
     )
 )

@@ -19,39 +19,16 @@ namespace Geox
             Directory.SetCurrentDirectory(baseDir);
             Console.Title = "Geox";
 
-            string pythonExe = ResolvePython(baseDir);
-
-            if (string.IsNullOrEmpty(pythonExe) || !File.Exists(pythonExe))
-            {
-                Console.ForegroundColor = ConsoleColor.Yellow;
-                Console.WriteLine("[Geox] Setting up Python environment...");
-                Console.ResetColor();
-
-                string bootstrap = Path.Combine(baseDir, "tools", "bootstrap_python.ps1");
-                if (File.Exists(bootstrap))
-                {
-                    RunProcess("powershell.exe", string.Format("-NoProfile -ExecutionPolicy Bypass -File \"{0}\"", bootstrap));
-                    string runtimePy = Path.Combine(baseDir, "runtime", "python.exe");
-                    if (File.Exists(runtimePy))
-                    {
-                        string firstRun = Path.Combine(baseDir, "geox", "first_run.py");
-                        if (File.Exists(firstRun))
-                        {
-                            RunProcess(runtimePy, string.Format("\"{0}\"", firstRun));
-                        }
-                        pythonExe = runtimePy;
-                    }
-                }
-            }
+            string pythonExe = EnsurePython(baseDir);
 
             if (string.IsNullOrEmpty(pythonExe) || !File.Exists(pythonExe))
             {
                 Console.ForegroundColor = ConsoleColor.Red;
-                Console.WriteLine("[Geox Error] Could not find or bootstrap a Python runtime.");
-                Console.WriteLine("Please ensure Python 3.10+ is installed or internet access is available for bootstrap.");
+                Console.WriteLine("\n[Geox Error] Could not find or configure a usable Python environment.");
+                Console.WriteLine("Please ensure Python 3.10+ is installed or internet access is available for setup.");
                 Console.ResetColor();
                 Console.WriteLine("Press any key to exit...");
-                Console.ReadKey();
+                try { Console.ReadKey(); } catch { }
                 return 1;
             }
 
@@ -77,7 +54,7 @@ namespace Geox
                 }
             }
 
-            int exitCode = RunProcess(pythonExe, pyArgs.ToString());
+            int exitCode = RunProcess(pythonExe, pyArgs.ToString(), false);
             if (exitCode != 0)
             {
                 Console.ForegroundColor = ConsoleColor.Red;
@@ -93,21 +70,124 @@ namespace Geox
             return exitCode;
         }
 
-        static string ResolvePython(string baseDir)
+        static string EnsurePython(string baseDir)
         {
             string venvPy = Path.Combine(baseDir, ".venv", "Scripts", "python.exe");
-            if (File.Exists(venvPy)) return venvPy;
-
             string runtimePy = Path.Combine(baseDir, "runtime", "python.exe");
-            if (File.Exists(runtimePy)) return runtimePy;
+            string firstRun = Path.Combine(baseDir, "geox", "first_run.py");
+            string reqFile = Path.Combine(baseDir, "requirements.txt");
 
-            string systemPy = FindOnPath("python.exe");
-            if (!string.IsNullOrEmpty(systemPy)) return systemPy;
+            // 1. Existing venv
+            if (File.Exists(venvPy))
+            {
+                if (VerifyPython(venvPy)) return venvPy;
 
-            string pyLauncher = FindOnPath("py.exe");
-            if (!string.IsNullOrEmpty(pyLauncher)) return pyLauncher;
+                Console.ForegroundColor = ConsoleColor.Yellow;
+                Console.WriteLine("[Geox] Verifying and updating dependencies in virtual environment...");
+                Console.ResetColor();
+                InstallDependencies(venvPy, firstRun, reqFile);
+                if (VerifyPython(venvPy)) return venvPy;
+            }
+
+            // 2. Existing private runtime
+            if (File.Exists(runtimePy))
+            {
+                if (VerifyPython(runtimePy)) return runtimePy;
+
+                Console.ForegroundColor = ConsoleColor.Yellow;
+                Console.WriteLine("[Geox] Verifying and updating dependencies in runtime...");
+                Console.ResetColor();
+                InstallDependencies(runtimePy, firstRun, reqFile);
+                if (VerifyPython(runtimePy)) return runtimePy;
+            }
+
+            // 3. Fresh installation: try creating a .venv with system Python
+            string systemPy = FindSystemPython();
+            if (!string.IsNullOrEmpty(systemPy))
+            {
+                Console.ForegroundColor = ConsoleColor.Yellow;
+                Console.WriteLine("[Geox] First-time setup: configuring Python environment...");
+                Console.ResetColor();
+
+                int code = RunProcess(systemPy, "-m venv .venv", false);
+                if (code == 0 && File.Exists(venvPy))
+                {
+                    InstallDependencies(venvPy, firstRun, reqFile);
+                    if (VerifyPython(venvPy)) return venvPy;
+                }
+            }
+
+            // 4. Fallback: bootstrap private Python runtime via PowerShell
+            string bootstrap = Path.Combine(baseDir, "tools", "bootstrap_python.ps1");
+            if (File.Exists(bootstrap))
+            {
+                Console.ForegroundColor = ConsoleColor.Yellow;
+                Console.WriteLine("[Geox] Downloading self-contained Python runtime (~11 MB)...");
+                Console.ResetColor();
+
+                RunProcess("powershell.exe", string.Format("-NoProfile -ExecutionPolicy Bypass -File \"{0}\"", bootstrap), false);
+                if (File.Exists(runtimePy))
+                {
+                    InstallDependencies(runtimePy, firstRun, reqFile);
+                    if (VerifyPython(runtimePy)) return runtimePy;
+                }
+            }
+
+            // 5. Final fallback: does system Python happen to have all dependencies installed globally?
+            if (!string.IsNullOrEmpty(systemPy) && VerifyPython(systemPy))
+            {
+                return systemPy;
+            }
 
             return null;
+        }
+
+        static bool VerifyPython(string pyExe)
+        {
+            if (string.IsNullOrEmpty(pyExe) || !File.Exists(pyExe)) return false;
+            try
+            {
+                return RunProcess(pyExe, "-c \"import flask, requests, pymobiledevice3\"", true) == 0;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        static void InstallDependencies(string pyExe, string firstRun, string reqFile)
+        {
+            if (File.Exists(firstRun))
+            {
+                RunProcess(pyExe, string.Format("\"{0}\"", firstRun), false);
+            }
+            else if (File.Exists(reqFile))
+            {
+                RunProcess(pyExe, string.Format("-m pip install --quiet --disable-pip-version-check -r \"{0}\"", reqFile), false);
+            }
+        }
+
+        static string FindSystemPython()
+        {
+            string systemPy = FindOnPath("python.exe");
+            if (!string.IsNullOrEmpty(systemPy) && TestPythonUsable(systemPy)) return systemPy;
+
+            string pyLauncher = FindOnPath("py.exe");
+            if (!string.IsNullOrEmpty(pyLauncher) && TestPythonUsable(pyLauncher)) return pyLauncher;
+
+            return null;
+        }
+
+        static bool TestPythonUsable(string pyExe)
+        {
+            try
+            {
+                return RunProcess(pyExe, "-c \"import sys; sys.exit(0 if sys.version_info >= (3, 10) else 1)\"", true) == 0;
+            }
+            catch
+            {
+                return false;
+            }
         }
 
         static string FindOnPath(string exeName)
@@ -139,12 +219,12 @@ namespace Geox
             return null;
         }
 
-        static int RunProcess(string exe, string arguments)
+        static int RunProcess(string exe, string arguments, bool hideWindow)
         {
             ProcessStartInfo psi = new ProcessStartInfo(exe, arguments)
             {
                 UseShellExecute = false,
-                CreateNoWindow = false
+                CreateNoWindow = hideWindow
             };
 
             using (Process proc = new Process())
