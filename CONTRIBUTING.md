@@ -6,8 +6,8 @@ Thank you for your interest in contributing to Geox. We welcome issues, bug fixe
 
 1. **Clone the repository**:
    ```bash
-   git clone https://github.com/arx33dbu/geox-BU.git
-   cd geox-BU
+   git clone https://github.com/arx33d/Geox.git
+   cd Geox
    ```
 
 2. **Create and activate a virtual environment**:

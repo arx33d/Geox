@@ -4,13 +4,13 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "geox"
-version = "1.0.0"
+version = "1.6.1"
 description = "GPS location spoofer for USB and Wi-Fi connected iPhones and Android devices"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT with Commons Clause Condition v1.0" }
 authors = [
-    { name = "arx33d", email = "arx33dbu@gmail.com" }
+    { name = "arx33d", email = "arx33d@gmail.com" }
 ]
 classifiers = [
     "Development Status :: 5 - Production/Stable",

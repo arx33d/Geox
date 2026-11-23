@@ -16,7 +16,7 @@ The Geox team takes security and privacy seriously. If you discover a vulnerabil
 ### How to Report
 
 1. **Do not report security issues via public GitHub issues.**
-2. Send an email with full details to `arx33dbu@gmail.com` (or submit a private security report through GitHub Security Advisories at https://github.com/arx33dbu/geox-BU/security/advisories/new).
+2. Send an email with full details to `arx33d@gmail.com` (or submit a private security report through GitHub Security Advisories at https://github.com/arx33d/Geox/security/advisories/new).
 3. Include the following information:
    - Type of issue (e.g. buffer overflow, credential exposure, privilege escalation)
    - Step-by-step instructions or proof-of-concept to reproduce the behavior
