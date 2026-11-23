@@ -31,7 +31,7 @@ classifiers = [
 dependencies = [
     "flask>=3.0",
     "waitress>=3.0",
-    "requests>=2.31",
+    "requests>=2.34.2",
     "pymobiledevice3>=11.0",
     "gpxpy>=1.6",
 ]
