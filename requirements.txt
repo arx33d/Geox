@@ -1,5 +1,5 @@
 flask>=3.0
 waitress>=3.0
 requests>=2.31
-pymobiledevice3>=11.0
+pymobiledevice3>=11.61.0
 gpxpy>=1.6
