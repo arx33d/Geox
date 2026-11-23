@@ -68,7 +68,7 @@ jobs:
           Write-Host "GeoxSetup.exe hash: $((Get-FileHash GeoxSetup.exe).Hash)"
 
       - name: Upload Binaries Artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: geox-windows-binaries
           path: |
